@@ -18090,6 +18090,10 @@ exports.UndoManager = UndoManager;
                         window.ace = a;
                     for (var key in a) if (a.hasOwnProperty(key))
                         window.ace[key] = a[key];
+
+                   if ( typeof module !== 'undefined' && module.exports ) {
+                        module.exports = window.ace;
+                   }
                 });
             })();
         

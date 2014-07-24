@@ -13,6 +13,7 @@ rm -rf ace
 mv $REPONAME-master/src-noconflict ace
 rm -rf ace/snippets
 mv ace/ace.js .
+patch -p0 < ace.js.patch
 echo $VERSION
 for var in README.md kanso.json
 do
