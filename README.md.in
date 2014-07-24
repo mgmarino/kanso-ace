@@ -10,6 +10,12 @@ This is currently version @VERSION@.  The ace website is:
 Usage
 -----
 
+General usage:
+
+```
+var ace = require("ace");
+```
+
 More information concerning the API for ace is found on the above webpage.  Ace
 comes with a very large number of extensions.  To accomodate all these
 possibilities without unnecessarily bloating the design document, ace may be
@@ -38,5 +44,11 @@ This will add the following attachments to your design document:
   ace/worker-php.js
 ```
 
-Note, these are all optional so can be left off if not needed/wanted.
+Note, these are all optional so can be left off if not needed/wanted.  Note,
+that if the above is done, make sure the base path to the files is given, e.g.
+
+```
+var ace = require("ace");
+ace.config.set("basePath", "/path/to/design_doc/ace");
+```
 
