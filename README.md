@@ -22,7 +22,7 @@ configured from your head kanso.json file:
     "ext" : ["linking"], 
     "mode" : ["python", "javascript"], 
     "theme" : ["github"], 
-    "worker" : ["php"], 
+    "worker" : ["php"]
   }
   ...
 }
