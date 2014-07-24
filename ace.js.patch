@@ -1,0 +1,17 @@
+diff --git ace.js ace.js
+index ef80d36..7ae6a8f 100644
+--- ace.js
++++ ace.js
+@@ -18090,6 +18090,10 @@ exports.UndoManager = UndoManager;
+                         window.ace = a;
+                     for (var key in a) if (a.hasOwnProperty(key))
+                         window.ace[key] = a[key];
++
++                   if ( typeof module !== 'undefined' && module.exports ) {
++                        module.exports = window.ace;
++                   }
+                 });
+             })();
+-        
+\ No newline at end of file
++        
