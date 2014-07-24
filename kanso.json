@@ -1,0 +1,21 @@
+{
+    "name": "ace",
+    "version": "2014.07.09-kanso.1",
+    "categories": ["utils"],
+    "maintainers": [
+        {
+            "name": "Michael Marino",
+            "url": "https://github.com/mgmarino"
+        }
+    ],
+    "url": "http://ace.c9.io/",
+    "modules": "ace.js",
+    "preprocessors" : {
+      "addoptions" : "build/addoptions"
+    },
+    "dependencies": {
+        "modules": null,
+        "attachments": null
+    },
+    "description": "ace provides a javascript-based code editor with syntax highlighting."
+}
