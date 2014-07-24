@@ -10,7 +10,7 @@ npm install async
 curl -L -O $DOWNLOAD_URL
 unzip master.zip
 rm -rf ace
-mv $REPONAME-master/src ace 
+mv $REPONAME-master/src-noconflict ace
 rm -rf ace/snippets
 mv ace/ace.js .
 echo $VERSION
