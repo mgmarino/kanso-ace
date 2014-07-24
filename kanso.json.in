@@ -10,6 +10,7 @@
     ],
     "url": "@URL@",
     "modules": "@MODULENAME@.js",
+    "modules_attachment": false,
     "preprocessors" : {
       "addoptions" : "build/addoptions"
     },

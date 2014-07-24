@@ -10,6 +10,7 @@
     ],
     "url": "http://ace.c9.io/",
     "modules": "ace.js",
+    "modules_attachment": false,
     "preprocessors" : {
       "addoptions" : "build/addoptions"
     },
