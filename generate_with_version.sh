@@ -5,7 +5,7 @@ URL="http:\/\/ace.c9.io\/"
 REPONAME=ace-builds
 DOWNLOAD_URL=https://github.com/ajaxorg/$REPONAME/archive/master.zip
 rm -rf node_modules
-npm install kanso-utils
+npm install git+https://github.com/kanso/kanso-utils.git 
 npm install async 
 curl -L -O $DOWNLOAD_URL
 unzip master.zip

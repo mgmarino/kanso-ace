@@ -1,6 +1,6 @@
 {
     "name": "@MODULENAME@",
-    "version": "@VERSION@-kanso.1",
+    "version": "@VERSION@-kanso.2",
     "categories": ["utils"],
     "maintainers": [
         {
