@@ -134,52 +134,15 @@ var keywords = (
     }, "identifier", true);
 
     this.$rules = {
-        start: [{ 
-            token : "string",
-            regex : "'",
-            stateName : "qstring",
-            next  : [{
-                token : "constant.language.escape",
-                regex : "''"
-            }, {
-                token : "string",
-                regex : "'|$",
-                next  : "start"
-            }, {
-                defaultToken: "string"
-            }]
-        }, {
-            token : "text",
-            regex : "\\s+"
-        }, {
-            regex: "",
-            next: "noQstring"
-        }],        
-        noQstring : [{
-            regex: "^\\s*%{\\s*$",
-            token: "comment.start",
-            push: "blockComment"
-        }, {
+        "start" : [ {
             token : "comment",
             regex : "%[^\r\n]*"
         }, {
-            token : "string",
-            regex : '"',
-            stateName : "qqstring",
-            next  : [{
-                token : "constant.language.escape",
-                regex : /\\./
-            }, {
-                token : "string",
-                regex : "\\\\$",
-                next  : "qqstring"
-            }, {
-                token : "string",
-                regex : '"|$',
-                next  : "start"
-            }, {
-                defaultToken: "string"
-            }]
+             token : "string",           // " string
+            regex : '".*?"'
+        }, {
+            token : "string",           // ' string
+            regex : "'.*?'"
         }, {
             token : "constant.numeric", // float
             regex : "[+-]?\\d+(?:(?:\\.\\d*)?(?:[eE][+-]?\\d+)?)?\\b"
@@ -188,41 +151,21 @@ var keywords = (
             regex : "[a-zA-Z_$][a-zA-Z0-9_$]*\\b"
         }, {
             token : "keyword.operator",
-            regex : "\\+|\\-|\\/|\\/\\/|<@>|@>|<@|&|\\^|~|<|>|<=|=>|==|!=|<>|=",
-            next: "start"
+            regex : "\\+|\\-|\\/|\\/\\/|<@>|@>|<@|&|\\^|~|<|>|<=|=>|==|!=|<>|="
         }, {
-            token : "punctuation.operator",
-            regex : "\\?|\\:|\\,|\\;|\\.",
-            next: "start"
+             token : "punctuation.operator",
+             regex : "\\?|\\:|\\,|\\;|\\."
         }, {
             token : "paren.lparen",
-            regex : "[({\\[]",
-            next: "start"
+            regex : "[\\(]"
         }, {
             token : "paren.rparen",
-            regex : "[\\]})]"
+            regex : "[\\)]"
         }, {
             token : "text",
             regex : "\\s+"
-        }, {
-            token : "text",
-            regex : "$",
-            next  : "start"
-        }],
-        blockComment: [{
-            regex: "^\\s*%{\\s*$",
-            token: "comment.start",
-            push: "blockComment"
-        }, {
-            regex: "^\\s*%}\\s*$",
-            token: "comment.end",
-            next: "pop"
-        }, {
-            defaultToken: "comment"
-        }],
+        } ]
     };
-    
-    this.normalizeRules();
 };
 
 oop.inherits(MatlabHighlightRules, TextHighlightRules);

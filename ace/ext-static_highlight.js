@@ -9,6 +9,7 @@ font-size: 12px;\
 }\
 .ace_static_highlight .ace_gutter {\
 width: 25px !important;\
+display: block;\
 float: left;\
 text-align: right;\
 padding: 0 3px 0 0;\
@@ -74,6 +75,7 @@ var highlight = function(el, opts, callback) {
         callback && callback();
     });
 };
+
 highlight.render = function(input, mode, theme, lineStart, disableGutter, callback) {
     var waiting = 1;
     var modeCache = EditSession.prototype.$modes;
@@ -84,16 +86,11 @@ highlight.render = function(input, mode, theme, lineStart, disableGutter, callba
             --waiting || done();
         });
     }
-    var modeOptions;
-    if (mode && typeof mode === "object" && !mode.getTokenizer) {
-        modeOptions = mode;
-        mode = modeOptions.path;
-    }
+
     if (typeof mode == "string") {
         waiting++;
         config.loadModule(['mode', mode], function(m) {
-            if (!modeCache[mode] || modeOptions)
-                modeCache[mode] = new m.Mode(modeOptions);
+            if (!modeCache[mode]) modeCache[mode] = new m.Mode();
             mode = modeCache[mode];
             --waiting || done();
         });
@@ -104,6 +101,7 @@ highlight.render = function(input, mode, theme, lineStart, disableGutter, callba
     }
     return --waiting || done();
 };
+
 highlight.renderSync = function(input, mode, theme, lineStart, disableGutter) {
     lineStart = parseInt(lineStart || 1, 10);
 
@@ -148,6 +146,7 @@ highlight.renderSync = function(input, mode, theme, lineStart, disableGutter) {
 module.exports = highlight;
 module.exports.highlight =highlight;
 });
+;
                 (function() {
                     ace.require(["ace/ext/static_highlight"], function() {});
                 })();

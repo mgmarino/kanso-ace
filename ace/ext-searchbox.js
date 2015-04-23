@@ -9,7 +9,7 @@ var searchboxCss = "\
 background-color: #ddd;\
 border: 1px solid #cbcbcb;\
 border-top: 0 none;\
-max-width: 325px;\
+max-width: 297px;\
 overflow: hidden;\
 margin: 0;\
 padding: 4px;\
@@ -47,6 +47,7 @@ border: 0 none;\
 -webkit-box-sizing: border-box;\
 -moz-box-sizing: border-box;\
 box-sizing: border-box;\
+display: block;\
 float: left;\
 height: 22px;\
 outline: 0;\
@@ -60,6 +61,7 @@ background: #fff;\
 border: 0 none;\
 border-left: 1px solid #dcdcdc;\
 cursor: pointer;\
+display: block;\
 float: left;\
 height: 22px;\
 margin: 0;\
@@ -92,9 +94,12 @@ border-radius: 50%;\
 border: 0 none;\
 color: #656565;\
 cursor: pointer;\
+display: block;\
 float: right;\
-font: 16px/16px Arial;\
+font-family: Arial;\
+font-size: 16px;\
 height: 14px;\
+line-height: 16px;\
 margin: 5px 1px 9px 5px;\
 padding: 0;\
 text-align: center;\
@@ -158,7 +163,6 @@ var html = '<div class="ace_search right">\
         <input class="ace_search_field" placeholder="Search for" spellcheck="false"></input>\
         <button type="button" action="findNext" class="ace_searchbtn next"></button>\
         <button type="button" action="findPrev" class="ace_searchbtn prev"></button>\
-        <button type="button" action="findAll" class="ace_searchbtn" title="Alt-Enter">All</button>\
     </div>\
     <div class="ace_replace_form">\
         <input class="ace_search_field" placeholder="Replace with" spellcheck="false"></input>\
@@ -279,11 +283,6 @@ var SearchBox = function(editor, range, showReplaceForm) {
                 sb.replace();
             sb.findPrev();
         },
-        "Alt-Return": function(sb) {
-            if (sb.activeInput == sb.replaceInput)
-                sb.replaceAll();
-            sb.findAll();
-        },
         "Tab": function(sb) {
             (sb.activeInput == sb.replaceInput ? sb.searchInput : sb.replaceInput).focus();
         }
@@ -343,18 +342,6 @@ var SearchBox = function(editor, range, showReplaceForm) {
     this.findPrev = function() {
         this.find(true, true);
     };
-    this.findAll = function(){
-        var range = this.editor.findAll(this.searchInput.value, {            
-            regExp: this.regExpOption.checked,
-            caseSensitive: this.caseSensitiveOption.checked,
-            wholeWord: this.wholeWordOption.checked
-        });
-        var noMatch = !range && this.searchInput.value;
-        dom.setCssClass(this.searchBox, "ace_nomatch", noMatch);
-        this.editor._emit("findSearchBox", { match: !noMatch });
-        this.highlight();
-        this.hide();
-    };
     this.replace = function() {
         if (!this.editor.getReadOnly())
             this.editor.replace(this.replaceInput.value);
@@ -389,10 +376,6 @@ var SearchBox = function(editor, range, showReplaceForm) {
         this.editor.keyBinding.addKeyboardHandler(this.$closeSearchBarKb);
     };
 
-    this.isFocused = function() {
-        var el = document.activeElement;
-        return el == this.searchInput || el == this.replaceInput;
-    }
 }).call(SearchBox.prototype);
 
 exports.SearchBox = SearchBox;
@@ -403,6 +386,7 @@ exports.Search = function(editor, isReplace) {
 };
 
 });
+;
                 (function() {
                     ace.require(["ace/ext/searchbox"], function() {});
                 })();

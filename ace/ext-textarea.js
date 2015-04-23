@@ -159,21 +159,11 @@ exports.edit = function(el) {
             throw new Error("ace.edit can't find div #" + _id);
     }
 
-    if (el && el.env && el.env.editor instanceof Editor)
+    if (el.env && el.env.editor instanceof Editor)
         return el.env.editor;
 
-    var value = "";
-    if (el && /input|textarea/i.test(el.tagName)) {
-        var oldNode = el;
-        value = oldNode.value;
-        el = dom.createElement("pre");
-        oldNode.parentNode.replaceChild(el, oldNode);
-    } else {
-        value = dom.getInnerText(el);
-        el.innerHTML = '';
-    }
-
-    var doc = exports.createEditSession(value);
+    var doc = exports.createEditSession(dom.getInnerText(el));
+    el.innerHTML = '';
 
     var editor = new Editor(new Renderer(el));
     editor.setSession(doc);
@@ -183,13 +173,11 @@ exports.edit = function(el) {
         editor: editor,
         onResize: editor.resize.bind(editor, null)
     };
-    if (oldNode) env.textarea = oldNode;
     event.addListener(window, "resize", env.onResize);
     editor.on("destroy", function() {
         event.removeListener(window, "resize", env.onResize);
-        env.editor.container.env = null; // prevent memory leak on old ie
     });
-    editor.container.env = editor.env = env;
+    el.env = editor.env = env;
     return editor;
 };
 exports.createEditSession = function(text, mode) {
@@ -626,6 +614,7 @@ exports.defaultOptions = {
 };
 
 });
+;
                 (function() {
                     ace.require(["ace/ext/textarea"], function() {});
                 })();

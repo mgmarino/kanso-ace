@@ -17,13 +17,7 @@ window.window = window;
 window.ace = window;
 
 window.onerror = function(message, file, line, col, err) {
-    postMessage({type: "error", data: {
-        message: message,
-        file: file,
-        line: line, 
-        col: col,
-        stack: err.stack
-    }});
+    console.error("Worker " + (err ? err.stack : message));
 };
 
 window.normalizeModule = function(parentId, moduleName) {
@@ -90,20 +84,15 @@ window.define = function(id, deps, factory) {
         deps = [];
         id = window.require.id;
     }
-    
-    if (typeof factory != "function") {
-        window.require.modules[id] = {
-            exports: factory,
-            initialized: true
-        };
-        return;
-    }
 
     if (!deps.length)
         // If there is no dependencies, we inject 'require', 'exports' and
         // 'module' as dependencies, to provide CommonJS compatibility.
         deps = ['require', 'exports', 'module'];
 
+    if (id.indexOf("text!") === 0) 
+        return;
+    
     var req = function(childId) {
         return window.require(id, childId);
     };
@@ -336,6 +325,7 @@ exports.getMatchOffsets = function(string, regExp) {
     return matches;
 };
 exports.deferredCall = function(fcn) {
+
     var timer = null;
     var callback = function() {
         timer = null;
@@ -1056,9 +1046,9 @@ var Document = function(text) {
     this._insertLines = function(row, lines) {
         if (lines.length == 0)
             return {row: row, column: 0};
-        while (lines.length > 20000) {
-            var end = this._insertLines(row, lines.slice(0, 20000));
-            lines = lines.slice(20000);
+        while (lines.length > 0xF000) {
+            var end = this._insertLines(row, lines.slice(0, 0xF000));
+            lines = lines.slice(0xF000);
             row = end.row;
         }
 
@@ -1510,7 +1500,7 @@ SyntaxUnit.fromToken = function(token){
 SyntaxUnit.prototype = {
     constructor: SyntaxUnit,
     valueOf: function(){
-        return this.text;
+        return this.toString();
     },
     toString: function(){
         return this.text;
@@ -1708,6 +1698,8 @@ TokenStreamBase.prototype = {
 };
 
 
+
+
 parserlib.util = {
 StringReader: StringReader,
 SyntaxError : SyntaxError,
@@ -1722,6 +1714,7 @@ TokenStreamBase = parserlib.util.TokenStreamBase,
 StringReader = parserlib.util.StringReader,
 SyntaxError = parserlib.util.SyntaxError,
 SyntaxUnit  = parserlib.util.SyntaxUnit;
+
 
 var Colors = {
     aliceblue       :"#f0f8ff",
@@ -2137,7 +2130,7 @@ Parser.prototype = function(){
                 this._readWhitespace();
 
                 tokenStream.mustMatch([Tokens.STRING, Tokens.URI]);
-                uri = tokenStream.token().value.replace(/^(?:url\()?["']?([^"']+?)["']?\)?$/, "$1");
+                uri = tokenStream.token().value.replace(/(?:url\()?["']([^"']+)["']\)?/, "$1");
 
                 this._readWhitespace();
 
@@ -2218,10 +2211,8 @@ Parser.prototype = function(){
                 while(true) {
                     if (tokenStream.peek() == Tokens.PAGE_SYM){
                         this._page();
-                    } else if (tokenStream.peek() == Tokens.FONT_FACE_SYM){
+                    } else   if (tokenStream.peek() == Tokens.FONT_FACE_SYM){
                         this._font_face();
-                    } else if (tokenStream.peek() == Tokens.VIEWPORT_SYM){
-                        this._viewport();
                     } else if (!this._ruleset()){
                         break;
                     }
@@ -3068,7 +3059,7 @@ Parser.prototype = function(){
                     value       = null,
                     operator    = null;
 
-                value = this._term(inFunction);
+                value = this._term();
                 if (value !== null){
 
                     values.push(value);
@@ -3082,7 +3073,7 @@ Parser.prototype = function(){
 							valueParts = [];
 						}*/
 
-                        value = this._term(inFunction);
+                        value = this._term();
 
                         if (value === null){
                             break;
@@ -3095,12 +3086,11 @@ Parser.prototype = function(){
                 return values.length > 0 ? new PropertyValue(values, values[0].line, values[0].col) : null;
             },
 
-            _term: function(inFunction){
+            _term: function(){
 
                 var tokenStream = this._tokenStream,
                     unary       = null,
                     value       = null,
-                    endChar     = null,
                     token,
                     line,
                     col;
@@ -3116,18 +3106,6 @@ Parser.prototype = function(){
                         line = tokenStream.token().startLine;
                         col = tokenStream.token().startCol;
                     }
-                } else if (inFunction && tokenStream.match([Tokens.LPAREN, Tokens.LBRACE, Tokens.LBRACKET])){
-
-                    token = tokenStream.token();
-                    endChar = token.endChar;
-                    value = token.value + this._expr(inFunction).text;
-                    if (unary === null){
-                        line = tokenStream.token().startLine;
-                        col = tokenStream.token().startCol;
-                    }
-                    tokenStream.mustMatch(Tokens.type(endChar));
-                    value += endChar;
-                    this._readWhitespace();
                 } else if (tokenStream.match([Tokens.NUMBER, Tokens.PERCENTAGE, Tokens.LENGTH,
                         Tokens.ANGLE, Tokens.TIME,
                         Tokens.FREQ, Tokens.STRING, Tokens.IDENT, Tokens.URI, Tokens.UNICODE_RANGE])){
@@ -3537,7 +3515,6 @@ var Properties = {
     "animation-delay"               : { multi: "<time>", comma: true },
     "animation-direction"           : { multi: "normal | alternate", comma: true },
     "animation-duration"            : { multi: "<time>", comma: true },
-    "animation-fill-mode"           : { multi: "none | forwards | backwards | both", comma: true },
     "animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
     "animation-name"                : { multi: "none | <ident>", comma: true },
     "animation-play-state"          : { multi: "running | paused", comma: true },
@@ -3559,7 +3536,6 @@ var Properties = {
     "-webkit-animation-delay"               : { multi: "<time>", comma: true },
     "-webkit-animation-direction"           : { multi: "normal | alternate", comma: true },
     "-webkit-animation-duration"            : { multi: "<time>", comma: true },
-    "-webkit-animation-fill-mode"           : { multi: "none | forwards | backwards | both", comma: true },
     "-webkit-animation-iteration-count"     : { multi: "<number> | infinite", comma: true },
     "-webkit-animation-name"                : { multi: "none | <ident>", comma: true },
     "-webkit-animation-play-state"          : { multi: "running | paused", comma: true },
@@ -3796,23 +3772,23 @@ var Properties = {
     "filter"                        : 1,
     "fit"                           : "fill | hidden | meet | slice",
     "fit-position"                  : 1,
-    "flex"                          : "<flex>",
+    "flex"                          : "none | [ <flex-grow> <flex-shrink>? || <flex-basis>",
     "flex-basis"                    : "<width>",
     "flex-direction"                : "row | row-reverse | column | column-reverse",
     "flex-flow"                     : "<flex-direction> || <flex-wrap>",
     "flex-grow"                     : "<number>",
     "flex-shrink"                   : "<number>",
     "flex-wrap"                     : "nowrap | wrap | wrap-reverse",
-    "-webkit-flex"                  : "<flex>",
+    "-webkit-flex"                  : "none | [ <flex-grow> <flex-shrink>? || <flex-basis>",
     "-webkit-flex-basis"            : "<width>",
     "-webkit-flex-direction"        : "row | row-reverse | column | column-reverse",
     "-webkit-flex-flow"             : "<flex-direction> || <flex-wrap>",
     "-webkit-flex-grow"             : "<number>",
     "-webkit-flex-shrink"           : "<number>",
     "-webkit-flex-wrap"             : "nowrap | wrap | wrap-reverse",
-    "-ms-flex"                      : "<flex>",
+    "-ms-flex"                      : "[[ <number> <number>? ] || [ <length> || <percentage> || auto ] ] | none",
     "-ms-flex-align"                : "start | end | center | stretch | baseline",
-    "-ms-flex-direction"            : "row | row-reverse | column | column-reverse | inherit",
+    "-ms-flex-direction"            : "row | column | row-reverse | column-reverse | inherit",
     "-ms-flex-order"                : "<number>",
     "-ms-flex-pack"                 : "start | end | center | justify",
     "-ms-flex-wrap"                 : "nowrap | wrap | wrap-reverse",
@@ -3840,7 +3816,7 @@ var Properties = {
     "grid-row-span"                 : "<integer>",
     "grid-row-sizing"               : 1,
     "hanging-punctuation"           : 1,
-    "height"                        : "<margin-width> | <content-sizing> | inherit",
+    "height"                        : "<margin-width> | inherit",
     "hyphenate-after"               : "<integer> | auto",
     "hyphenate-before"              : "<integer> | auto",
     "hyphenate-character"           : "<string> | auto",
@@ -3879,10 +3855,10 @@ var Properties = {
     "marquee-play-count"            : 1,
     "marquee-speed"                 : 1,
     "marquee-style"                 : 1,
-    "max-height"                    : "<length> | <percentage> | <content-sizing> | none | inherit",
-    "max-width"                     : "<length> | <percentage> | <content-sizing> | none | inherit",
-    "min-height"                    : "<length> | <percentage> | <content-sizing> | contain-floats | -moz-contain-floats | -webkit-contain-floats | inherit",
-    "min-width"                     : "<length> | <percentage> | <content-sizing> | contain-floats | -moz-contain-floats | -webkit-contain-floats | inherit",
+    "max-height"                    : "<length> | <percentage> | none | inherit",
+    "max-width"                     : "<length> | <percentage> | none | inherit",
+    "min-height"                    : "<length> | <percentage> | inherit",
+    "min-width"                     : "<length> | <percentage> | inherit",
     "move-to"                       : 1,
     "nav-down"                      : 1,
     "nav-index"                     : 1,
@@ -3997,7 +3973,7 @@ var Properties = {
     "white-space"                   : "normal | pre | nowrap | pre-wrap | pre-line | inherit | -pre-wrap | -o-pre-wrap | -moz-pre-wrap | -hp-pre-wrap", //http://perishablepress.com/wrapping-content/
     "white-space-collapse"          : 1,
     "widows"                        : "<integer> | inherit",
-    "width"                         : "<length> | <percentage> | <content-sizing> | auto | inherit",
+    "width"                         : "<length> | <percentage> | auto | inherit" ,
     "word-break"                    : "normal | keep-all | break-all",
     "word-spacing"                  : "<length> | normal | inherit",
     "word-wrap"                     : "normal | break-word",
@@ -4083,8 +4059,7 @@ function PropertyValuePart(text, line, col){
             case "ch":
             case "vh":
             case "vw":
-            case "vmax":
-            case "vmin":
+            case "vm":
                 this.type = "length";
                 break;
 
@@ -4185,7 +4160,7 @@ function PropertyValuePart(text, line, col){
     } else if (/^[\,\/]$/.test(text)){
         this.type   = "operator";
         this.value  = text;
-    } else if (/^[a-z\-_\u0080-\uFFFF][a-z0-9\-_\u0080-\uFFFF]*$/i.test(text)){
+    } else if (/^[a-z\-\u0080-\uFFFF][a-z0-9\-\u0080-\uFFFF]*$/i.test(text)){
         this.type   = "identifier";
         this.value  = text;
     }
@@ -4197,6 +4172,7 @@ PropertyValuePart.prototype.constructor = PropertyValuePart;
 PropertyValuePart.fromToken = function(token){
     return new PropertyValuePart(token.value, token.startLine, token.startCol);
 };
+
 var Pseudos = {
     ":first-letter": 1,
     ":first-line":   1,
@@ -4486,7 +4462,6 @@ TokenStream.prototype = mix(new TokenStreamBase(), {
             value:      value,
             type:       tt,
             channel:    options.channel,
-            endChar:    options.endChar,
             hide:       options.hide || false,
             startLine:  startLine,
             startCol:   startCol,
@@ -4519,15 +4494,12 @@ TokenStream.prototype = mix(new TokenStreamBase(), {
     },
     charToken: function(c, startLine, startCol){
         var tt = Tokens.type(c);
-        var opts = {};
 
         if (tt == -1){
             tt = Tokens.CHAR;
-        } else {
-            opts.endChar = Tokens[tt].endChar;
         }
 
-        return this.createToken(tt, c, startLine, startCol, opts);
+        return this.createToken(tt, c, startLine, startCol);
     },
     commentToken: function(first, startLine, startCol){
         var reader  = this._reader,
@@ -4671,7 +4643,7 @@ TokenStream.prototype = mix(new TokenStreamBase(), {
             ident = this.readName(reader.read());
             value += ident;
 
-            if (/^em$|^ex$|^px$|^gd$|^rem$|^vw$|^vh$|^vmax$|^vmin$|^ch$|^cm$|^mm$|^in$|^pt$|^pc$/i.test(ident)){
+            if (/^em$|^ex$|^px$|^gd$|^rem$|^vw$|^vh$|^vm$|^ch$|^cm$|^mm$|^in$|^pt$|^pc$/i.test(ident)){
                 tt = Tokens.LENGTH;
             } else if (/^deg|^rad$|^grad$/i.test(ident)){
                 tt = Tokens.ANGLE;
@@ -4953,6 +4925,7 @@ TokenStream.prototype = mix(new TokenStreamBase(), {
     }
 });
 
+
 var Tokens  = [
     { name: "CDO"},
     { name: "CDC"},
@@ -5030,7 +5003,6 @@ var Tokens  = [
 
     {
         name: "LBRACE",
-        endChar: "}",
         text: "{"
     },
     {
@@ -5039,7 +5011,6 @@ var Tokens  = [
     },
     {
         name: "LBRACKET",
-        endChar: "]",
         text: "["
     },
     {
@@ -5061,7 +5032,6 @@ var Tokens  = [
 
     {
         name: "LPAREN",
-        endChar: ")",
         text: "("
     },
     {
@@ -5421,10 +5391,6 @@ var ValidationTypes = {
             return ValidationTypes.isLiteral(part, "none | hidden | dotted | dashed | solid | double | groove | ridge | inset | outset");
         },
 
-        "<content-sizing>": function(part){ // http://www.w3.org/TR/css3-sizing/#width-height-keywords
-            return ValidationTypes.isLiteral(part, "fill-available | -moz-available | -webkit-fill-available | max-content | -moz-max-content | -webkit-max-content | min-content | -moz-min-content | -webkit-min-content | fit-content | -moz-fit-content | -webkit-fit-content");
-        },
-
         "<margin-width>": function(part){
             return this["<length>"](part) || this["<percentage>"](part) || ValidationTypes.isLiteral(part, "auto");
         },
@@ -5439,30 +5405,6 @@ var ValidationTypes = {
 
         "<time>": function(part) {
             return part.type == "time";
-        },
-
-        "<flex-grow>": function(part){
-            return this["<number>"](part);
-        },
-
-        "<flex-shrink>": function(part){
-            return this["<number>"](part);
-        },
-
-        "<width>": function(part){
-            return this["<margin-width>"](part);
-        },
-
-        "<flex-basis>": function(part){
-            return this["<width>"](part);
-        },
-
-        "<flex-direction>": function(part){
-            return ValidationTypes.isLiteral(part, "row | row-reverse | column | column-reverse");
-        },
-
-        "<flex-wrap>": function(part){
-            return ValidationTypes.isLiteral(part, "nowrap | wrap | wrap-reverse");
         }
     },
 
@@ -5617,42 +5559,11 @@ var ValidationTypes = {
             }
 
             return result;
-        },
-
-        "<flex>": function(expression) {
-            var part,
-                result = false;
-            if (ValidationTypes.isAny(expression, "none | inherit")) {
-                result = true;
-            } else {
-                if (ValidationTypes.isType(expression, "<flex-grow>")) {
-                    if (expression.peek()) {
-                        if (ValidationTypes.isType(expression, "<flex-shrink>")) {
-                            if (expression.peek()) {
-                                result = ValidationTypes.isType(expression, "<flex-basis>");
-                            } else {
-                                result = true;
-                            }
-                        } else if (ValidationTypes.isType(expression, "<flex-basis>")) {
-                            result = expression.peek() === null;
-                        }
-                    } else {
-                        result = true;
-                    }
-                } else if (ValidationTypes.isType(expression, "<flex-basis>")) {
-                    result = true;
-                }
-            }
-
-            if (!result) {
-                part = expression.peek();
-                throw new ValidationError("Expected (none | [ <flex-grow> <flex-shrink>? || <flex-basis> ]) but found '" + expression.value.text + "'.", part.line, part.col);
-            }
-
-            return result;
         }
     }
 };
+
+
 
 parserlib.css = {
 Colors              :Colors,
@@ -5673,106 +5584,14 @@ ValidationError     :ValidationError
 };
 })();
 
+
+
+
 (function(){
 for(var prop in parserlib){
 exports[prop] = parserlib[prop];
 }
 })();
-
-
-function objectToString(o) {
-  return Object.prototype.toString.call(o);
-}
-var util = {
-  isArray: function (ar) {
-    return Array.isArray(ar) || (typeof ar === 'object' && objectToString(ar) === '[object Array]');
-  },
-  isDate: function (d) {
-    return typeof d === 'object' && objectToString(d) === '[object Date]';
-  },
-  isRegExp: function (re) {
-    return typeof re === 'object' && objectToString(re) === '[object RegExp]';
-  },
-  getRegExpFlags: function (re) {
-    var flags = '';
-    re.global && (flags += 'g');
-    re.ignoreCase && (flags += 'i');
-    re.multiline && (flags += 'm');
-    return flags;
-  }
-};
-
-
-if (typeof module === 'object')
-  module.exports = clone;
-
-function clone(parent, circular, depth, prototype) {
-  var allParents = [];
-  var allChildren = [];
-
-  var useBuffer = typeof Buffer != 'undefined';
-
-  if (typeof circular == 'undefined')
-    circular = true;
-
-  if (typeof depth == 'undefined')
-    depth = Infinity;
-  function _clone(parent, depth) {
-    if (parent === null)
-      return null;
-
-    if (depth == 0)
-      return parent;
-
-    var child;
-    if (typeof parent != 'object') {
-      return parent;
-    }
-
-    if (util.isArray(parent)) {
-      child = [];
-    } else if (util.isRegExp(parent)) {
-      child = new RegExp(parent.source, util.getRegExpFlags(parent));
-      if (parent.lastIndex) child.lastIndex = parent.lastIndex;
-    } else if (util.isDate(parent)) {
-      child = new Date(parent.getTime());
-    } else if (useBuffer && Buffer.isBuffer(parent)) {
-      child = new Buffer(parent.length);
-      parent.copy(child);
-      return child;
-    } else {
-      if (typeof prototype == 'undefined') child = Object.create(Object.getPrototypeOf(parent));
-      else child = Object.create(prototype);
-    }
-
-    if (circular) {
-      var index = allParents.indexOf(parent);
-
-      if (index != -1) {
-        return allChildren[index];
-      }
-      allParents.push(parent);
-      allChildren.push(child);
-    }
-
-    for (var i in parent) {
-      child[i] = _clone(parent[i], depth - 1);
-    }
-
-    return child;
-  }
-
-  return _clone(parent, depth);
-}
-clone.clonePrototype = function(parent) {
-  if (parent === null)
-    return null;
-
-  var c = function () {};
-  c.prototype = parent;
-  return new c();
-};
-
 var CSSLint = (function(){
 
     var rules           = [],
@@ -5854,20 +5673,20 @@ var CSSLint = (function(){
     };
     api.verify = function(text, ruleset){
 
-        var i = 0,
+        var i       = 0,
+            len     = rules.length,
             reporter,
             lines,
             report,
             parser = new parserlib.css.Parser({ starHack: true, ieFilters: true,
                                                 underscoreHack: true, strict: false });
-        lines = text.replace(/\n\r?/g, "$split$").split("$split$");
+        lines = text.replace(/\n\r?/g, "$split$").split('$split$');
 
         if (!ruleset){
             ruleset = this.getRuleset();
         }
 
         if (embeddedRuleset.test(text)){
-            ruleset = clone(ruleset);
             ruleset = applyEmbeddedRuleset(text, ruleset);
         }
 
@@ -5932,7 +5751,7 @@ Reporter.prototype = {
     },
     report: function(message, line, col, rule){
         this.messages.push({
-            type    : this.ruleset[rule.id] === 2 ? "error" : "warning",
+            type    : this.ruleset[rule.id] == 2 ? "error" : "warning",
             line    : line,
             col     : col,
             message : message,
@@ -6005,7 +5824,6 @@ CSSLint.Util = {
         }
     }
 };
-
 CSSLint.addRule({
     id: "adjoining-classes",
     name: "Disallow adjoining classes",
@@ -6025,11 +5843,11 @@ CSSLint.addRule({
                 selector = selectors[i];
                 for (j=0; j < selector.parts.length; j++){
                     part = selector.parts[j];
-                    if (part.type === parser.SELECTOR_PART_TYPE){
+                    if (part.type == parser.SELECTOR_PART_TYPE){
                         classCount = 0;
                         for (k=0; k < part.modifiers.length; k++){
                             modifier = part.modifiers[k];
-                            if (modifier.type === "class"){
+                            if (modifier.type == "class"){
                                 classCount++;
                             }
                             if (classCount > 1){
@@ -6076,13 +5894,13 @@ CSSLint.addRule({
 
         function endRule(){
             var prop, value;
-
+            
             if (!boxSizing) {
                 if (properties.height){
                     for (prop in heightProperties){
                         if (heightProperties.hasOwnProperty(prop) && properties[prop]){
                             value = properties[prop].value;
-                            if (!(prop === "padding" && value.parts.length === 2 && value.parts[0].value === 0)){
+                            if (!(prop == "padding" && value.parts.length === 2 && value.parts[0].value === 0)){
                                 reporter.report("Using height with " + prop + " can sometimes make elements larger than you expect.", properties[prop].line, properties[prop].col, rule);
                             }
                         }
@@ -6093,48 +5911,47 @@ CSSLint.addRule({
                     for (prop in widthProperties){
                         if (widthProperties.hasOwnProperty(prop) && properties[prop]){
                             value = properties[prop].value;
-
-                            if (!(prop === "padding" && value.parts.length === 2 && value.parts[1].value === 0)){
+                            
+                            if (!(prop == "padding" && value.parts.length === 2 && value.parts[1].value === 0)){
                                 reporter.report("Using width with " + prop + " can sometimes make elements larger than you expect.", properties[prop].line, properties[prop].col, rule);
                             }
                         }
                     }
-                }
-            }
+                }   
+            }     
         }
 
         parser.addListener("startrule", startRule);
         parser.addListener("startfontface", startRule);
         parser.addListener("startpage", startRule);
         parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
+        parser.addListener("startkeyframerule", startRule); 
 
         parser.addListener("property", function(event){
             var name = event.property.text.toLowerCase();
-
+            
             if (heightProperties[name] || widthProperties[name]){
-                if (!/^0\S*$/.test(event.value) && !(name === "border" && event.value.toString() === "none")){
+                if (!/^0\S*$/.test(event.value) && !(name == "border" && event.value == "none")){
                     properties[name] = { line: event.property.line, col: event.property.col, value: event.value };
                 }
             } else {
                 if (/^(width|height)/i.test(name) && /^(length|percentage)/.test(event.value.parts[0].type)){
                     properties[name] = 1;
-                } else if (name === "box-sizing") {
+                } else if (name == "box-sizing") {
                     boxSizing = true;
                 }
             }
-
+            
         });
 
         parser.addListener("endrule", endRule);
         parser.addListener("endfontface", endRule);
         parser.addListener("endpage", endRule);
         parser.addListener("endpagemargin", endRule);
-        parser.addListener("endkeyframerule", endRule);
+        parser.addListener("endkeyframerule", endRule);         
     }
 
 });
-
 CSSLint.addRule({
     id: "box-sizing",
     name: "Disallow use of box-sizing",
@@ -6146,15 +5963,14 @@ CSSLint.addRule({
 
         parser.addListener("property", function(event){
             var name = event.property.text.toLowerCase();
-
-            if (name === "box-sizing"){
+   
+            if (name == "box-sizing"){
                 reporter.report("The box-sizing property isn't supported in IE6 and IE7.", event.line, event.col, rule);
             }
-        });
+        });       
     }
 
 });
-
 CSSLint.addRule({
     id: "bulletproof-font-face",
     name: "Use the bulletproof @font-face syntax",
@@ -6162,11 +5978,12 @@ CSSLint.addRule({
     browsers: "All",
     init: function(parser, reporter){
         var rule = this,
+            count = 0,
             fontFaceRule = false,
             firstSrc     = true,
             ruleFailed    = false,
             line, col;
-        parser.addListener("startfontface", function(){
+        parser.addListener("startfontface", function(event){
             fontFaceRule = true;
         });
 
@@ -6179,7 +5996,7 @@ CSSLint.addRule({
                 value        = event.value.toString();
             line = event.line;
             col  = event.col;
-            if (propertyName === "src") {
+            if (propertyName === 'src') {
                 var regex = /^\s?url\(['"].+\.eot\?.*['"]\)\s*format\(['"]embedded-opentype['"]\).*$/i;
                 if (!value.match(regex) && firstSrc) {
                     ruleFailed = true;
@@ -6191,7 +6008,7 @@ CSSLint.addRule({
 
 
         });
-        parser.addListener("endfontface", function(){
+        parser.addListener("endfontface", function(event){
             fontFaceRule = false;
 
             if (ruleFailed) {
@@ -6199,8 +6016,7 @@ CSSLint.addRule({
             }
         });
     }
-});
-
+}); 
 CSSLint.addRule({
     id: "compatible-vendor-prefixes",
     name: "Require compatible vendor prefixes",
@@ -6282,15 +6098,15 @@ CSSLint.addRule({
         for (prop in compatiblePrefixes) {
             if (compatiblePrefixes.hasOwnProperty(prop)) {
                 variations = [];
-                prefixed = compatiblePrefixes[prop].split(" ");
+                prefixed = compatiblePrefixes[prop].split(' ');
                 for (i = 0, len = prefixed.length; i < len; i++) {
-                    variations.push("-" + prefixed[i] + "-" + prop);
+                    variations.push('-' + prefixed[i] + '-' + prop);
                 }
                 compatiblePrefixes[prop] = variations;
                 arrayPush.apply(applyTo, variations);
             }
         }
-
+                
         parser.addListener("startrule", function () {
             properties = [];
         });
@@ -6299,21 +6115,21 @@ CSSLint.addRule({
             inKeyFrame = event.prefix || true;
         });
 
-        parser.addListener("endkeyframes", function () {
+        parser.addListener("endkeyframes", function (event) {
             inKeyFrame = false;
         });
 
         parser.addListener("property", function (event) {
             var name = event.property;
             if (CSSLint.Util.indexOf(applyTo, name.text) > -1) {
-                if (!inKeyFrame || typeof inKeyFrame !== "string" ||
+                if (!inKeyFrame || typeof inKeyFrame != "string" || 
                         name.text.indexOf("-" + inKeyFrame + "-") !== 0) {
                     properties.push(name);
                 }
             }
         });
 
-        parser.addListener("endrule", function () {
+        parser.addListener("endrule", function (event) {
             if (!properties.length) {
                 return;
             }
@@ -6363,8 +6179,8 @@ CSSLint.addRule({
                         for (i = 0, len = full.length; i < len; i++) {
                             item = full[i];
                             if (CSSLint.Util.indexOf(actual, item) === -1) {
-                                propertiesSpecified = (actual.length === 1) ? actual[0] : (actual.length === 2) ? actual.join(" and ") : actual.join(", ");
-                                reporter.report("The property " + item + " is compatible with " + propertiesSpecified + " and should be included as well.", value.actualNodes[0].line, value.actualNodes[0].col, rule);
+                                propertiesSpecified = (actual.length === 1) ? actual[0] : (actual.length == 2) ? actual.join(" and ") : actual.join(", ");
+                                reporter.report("The property " + item + " is compatible with " + propertiesSpecified + " and should be included as well.", value.actualNodes[0].line, value.actualNodes[0].col, rule); 
                             }
                         }
 
@@ -6374,7 +6190,6 @@ CSSLint.addRule({
         });
     }
 });
-
 CSSLint.addRule({
     id: "display-property-grouping",
     name: "Require properties appropriate for display",
@@ -6404,12 +6219,12 @@ CSSLint.addRule({
 
         function reportProperty(name, display, msg){
             if (properties[name]){
-                if (typeof propertiesToCheck[name] !== "string" || properties[name].value.toLowerCase() !== propertiesToCheck[name]){
+                if (typeof propertiesToCheck[name] != "string" || properties[name].value.toLowerCase() != propertiesToCheck[name]){
                     reporter.report(msg || name + " can't be used with display: " + display + ".", properties[name].line, properties[name].col, rule);
                 }
             }
         }
-
+        
         function startRule(){
             properties = {};
         }
@@ -6425,7 +6240,7 @@ CSSLint.addRule({
                         reportProperty("width", display);
                         reportProperty("margin", display);
                         reportProperty("margin-top", display);
-                        reportProperty("margin-bottom", display);
+                        reportProperty("margin-bottom", display);              
                         reportProperty("float", display, "display:inline has no effect on floated elements (but may be used to fix the IE6 double-margin bug).");
                         break;
 
@@ -6448,7 +6263,7 @@ CSSLint.addRule({
                         }
                 }
             }
-
+          
         }
 
         parser.addListener("startrule", startRule);
@@ -6461,7 +6276,7 @@ CSSLint.addRule({
             var name = event.property.text.toLowerCase();
 
             if (propertiesToCheck[name]){
-                properties[name] = { value: event.value.text, line: event.property.line, col: event.property.col };
+                properties[name] = { value: event.value.text, line: event.property.line, col: event.property.col };                    
             }
         });
 
@@ -6474,7 +6289,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "duplicate-background-images",
     name: "Disallow duplicate background images",
@@ -6491,8 +6305,8 @@ CSSLint.addRule({
 
             if (name.match(/background/i)) {
                 for (i=0, len=value.parts.length; i < len; i++) {
-                    if (value.parts[i].type === "uri") {
-                        if (typeof stack[value.parts[i].uri] === "undefined") {
+                    if (value.parts[i].type == 'uri') {
+                        if (typeof stack[value.parts[i].uri] === 'undefined') {
                             stack[value.parts[i].uri] = event;
                         }
                         else {
@@ -6504,7 +6318,6 @@ CSSLint.addRule({
         });
     }
 });
-
 CSSLint.addRule({
     id: "duplicate-properties",
     name: "Disallow duplicate properties",
@@ -6513,36 +6326,35 @@ CSSLint.addRule({
     init: function(parser, reporter){
         var rule = this,
             properties,
-            lastProperty;
-
-        function startRule(){
-            properties = {};
+            lastProperty;            
+            
+        function startRule(event){
+            properties = {};        
         }
-
+        
         parser.addListener("startrule", startRule);
         parser.addListener("startfontface", startRule);
         parser.addListener("startpage", startRule);
         parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
+        parser.addListener("startkeyframerule", startRule);        
+        
         parser.addListener("property", function(event){
             var property = event.property,
                 name = property.text.toLowerCase();
-
-            if (properties[name] && (lastProperty !== name || properties[name] === event.value.text)){
+            
+            if (properties[name] && (lastProperty != name || properties[name] == event.value.text)){
                 reporter.report("Duplicate property '" + event.property + "' found.", event.line, event.col, rule);
             }
-
+            
             properties[name] = event.value.text;
             lastProperty = name;
-
+                        
         });
-
-
+            
+        
     }
 
 });
-
 CSSLint.addRule({
     id: "empty-rules",
     name: "Disallow empty rules",
@@ -6569,7 +6381,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "errors",
     name: "Parsing Errors",
@@ -6585,7 +6396,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "fallback-colors",
     name: "Require fallback colors",
@@ -6610,54 +6420,53 @@ CSSLint.addRule({
                 "background-color": 1
             },
             properties;
-
-        function startRule(){
-            properties = {};
-            lastProperty = null;
+        
+        function startRule(event){
+            properties = {};    
+            lastProperty = null;    
         }
-
+        
         parser.addListener("startrule", startRule);
         parser.addListener("startfontface", startRule);
         parser.addListener("startpage", startRule);
         parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
+        parser.addListener("startkeyframerule", startRule);        
+        
         parser.addListener("property", function(event){
             var property = event.property,
                 name = property.text.toLowerCase(),
                 parts = event.value.parts,
-                i = 0,
+                i = 0, 
                 colorType = "",
-                len = parts.length;
-
+                len = parts.length;                
+                        
             if(propertiesToCheck[name]){
                 while(i < len){
-                    if (parts[i].type === "color"){
+                    if (parts[i].type == "color"){
                         if ("alpha" in parts[i] || "hue" in parts[i]){
-
+                            
                             if (/([^\)]+)\(/.test(parts[i])){
                                 colorType = RegExp.$1.toUpperCase();
                             }
-
-                            if (!lastProperty || (lastProperty.property.text.toLowerCase() !== name || lastProperty.colorType !== "compat")){
+                            
+                            if (!lastProperty || (lastProperty.property.text.toLowerCase() != name || lastProperty.colorType != "compat")){
                                 reporter.report("Fallback " + name + " (hex or RGB) should precede " + colorType + " " + name + ".", event.line, event.col, rule);
                             }
                         } else {
                             event.colorType = "compat";
                         }
                     }
-
+                    
                     i++;
                 }
             }
 
             lastProperty = event;
-        });
-
+        });        
+         
     }
 
 });
-
 CSSLint.addRule({
     id: "floats",
     name: "Disallow too many floats",
@@ -6667,8 +6476,8 @@ CSSLint.addRule({
         var rule = this;
         var count = 0;
         parser.addListener("property", function(event){
-            if (event.property.text.toLowerCase() === "float" &&
-                    event.value.text.toLowerCase() !== "none"){
+            if (event.property.text.toLowerCase() == "float" &&
+                    event.value.text.toLowerCase() != "none"){
                 count++;
             }
         });
@@ -6681,7 +6490,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "font-faces",
     name: "Don't use too many web fonts",
@@ -6704,7 +6512,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "font-sizes",
     name: "Disallow too many font sizes",
@@ -6714,7 +6521,7 @@ CSSLint.addRule({
         var rule = this,
             count = 0;
         parser.addListener("property", function(event){
-            if (event.property.toString() === "font-size"){
+            if (event.property == "font-size"){
                 count++;
             }
         });
@@ -6727,7 +6534,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "gradients",
     name: "Require all gradient definitions",
@@ -6766,7 +6572,7 @@ CSSLint.addRule({
             if (!gradients.webkit){
                 missing.push("Webkit (Safari 5+, Chrome)");
             }
-
+            
             if (!gradients.oldWebkit){
                 missing.push("Old Webkit (Safari 4+, Chrome)");
             }
@@ -6775,8 +6581,8 @@ CSSLint.addRule({
                 missing.push("Opera 11.1+");
             }
 
-            if (missing.length && missing.length < 4){
-                reporter.report("Missing vendor-prefixed CSS gradients for " + missing.join(", ") + ".", event.selectors[0].line, event.selectors[0].col, rule);
+            if (missing.length && missing.length < 4){            
+                reporter.report("Missing vendor-prefixed CSS gradients for " + missing.join(", ") + ".", event.selectors[0].line, event.selectors[0].col, rule); 
             }
 
         });
@@ -6784,7 +6590,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "ids",
     name: "Disallow IDs in selectors",
@@ -6806,17 +6611,17 @@ CSSLint.addRule({
 
                 for (j=0; j < selector.parts.length; j++){
                     part = selector.parts[j];
-                    if (part.type === parser.SELECTOR_PART_TYPE){
+                    if (part.type == parser.SELECTOR_PART_TYPE){
                         for (k=0; k < part.modifiers.length; k++){
                             modifier = part.modifiers[k];
-                            if (modifier.type === "id"){
+                            if (modifier.type == "id"){
                                 idCount++;
                             }
                         }
                     }
                 }
 
-                if (idCount === 1){
+                if (idCount == 1){
                     reporter.report("Don't use IDs in selectors.", selector.line, selector.col, rule);
                 } else if (idCount > 1){
                     reporter.report(idCount + " IDs in the selector, really?", selector.line, selector.col, rule);
@@ -6827,7 +6632,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "import",
     name: "Disallow @import",
@@ -6835,15 +6639,14 @@ CSSLint.addRule({
     browsers: "All",
     init: function(parser, reporter){
         var rule = this;
-
-        parser.addListener("import", function(event){
+        
+        parser.addListener("import", function(event){        
             reporter.report("@import prevents parallel downloads, use <link> instead.", event.line, event.col, rule);
         });
 
     }
 
 });
-
 CSSLint.addRule({
     id: "important",
     name: "Disallow !important",
@@ -6867,7 +6670,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "known-properties",
     name: "Require use of known properties",
@@ -6877,6 +6679,7 @@ CSSLint.addRule({
         var rule = this;
 
         parser.addListener("property", function(event){
+            var name = event.property.text.toLowerCase();
             if (event.invalid) {
                 reporter.report(event.invalid.message, event.line, event.col, rule);
             }
@@ -6885,44 +6688,6 @@ CSSLint.addRule({
     }
 
 });
-CSSLint.addRule({
-    id: "order-alphabetical",
-    name: "Alphabetical order",
-    desc: "Assure properties are in alphabetical order",
-    browsers: "All",
-    init: function(parser, reporter){
-        var rule = this,
-            properties;
-
-        var startRule = function () {
-            properties = [];
-        };
-
-        parser.addListener("startrule", startRule);
-        parser.addListener("startfontface", startRule);
-        parser.addListener("startpage", startRule);
-        parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
-
-        parser.addListener("property", function(event){
-            var name = event.property.text,
-                lowerCasePrefixLessName = name.toLowerCase().replace(/^-.*?-/, "");
-
-            properties.push(lowerCasePrefixLessName);
-        });
-
-        parser.addListener("endrule", function(event){
-            var currentProperties = properties.join(","),
-                expectedProperties = properties.sort().join(",");
-
-            if (currentProperties !== expectedProperties){
-                reporter.report("Rule doesn't have all its properties in alphabetical ordered.", event.line, event.col, rule);
-            }
-        });
-    }
-
-});
-
 CSSLint.addRule({
     id: "outline-none",
     name: "Disallow outline: none",
@@ -6946,14 +6711,14 @@ CSSLint.addRule({
                 lastRule = null;
             }
         }
-
-        function endRule(){
+        
+        function endRule(event){
             if (lastRule){
                 if (lastRule.outline){
-                    if (lastRule.selectors.toString().toLowerCase().indexOf(":focus") === -1){
+                    if (lastRule.selectors.toString().toLowerCase().indexOf(":focus") == -1){
                         reporter.report("Outlines should only be modified using :focus.", lastRule.line, lastRule.col, rule);
-                    } else if (lastRule.propCount === 1) {
-                        reporter.report("Outlines shouldn't be hidden unless other visual changes are made.", lastRule.line, lastRule.col, rule);
+                    } else if (lastRule.propCount == 1) {
+                        reporter.report("Outlines shouldn't be hidden unless other visual changes are made.", lastRule.line, lastRule.col, rule);                        
                     }
                 }
             }
@@ -6963,31 +6728,30 @@ CSSLint.addRule({
         parser.addListener("startfontface", startRule);
         parser.addListener("startpage", startRule);
         parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
+        parser.addListener("startkeyframerule", startRule); 
 
         parser.addListener("property", function(event){
             var name = event.property.text.toLowerCase(),
-                value = event.value;
-
+                value = event.value;                
+                
             if (lastRule){
                 lastRule.propCount++;
-                if (name === "outline" && (value.toString() === "none" || value.toString() === "0")){
+                if (name == "outline" && (value == "none" || value == "0")){
                     lastRule.outline = true;
-                }
+                }            
             }
-
+            
         });
-
+        
         parser.addListener("endrule", endRule);
         parser.addListener("endfontface", endRule);
         parser.addListener("endpage", endRule);
         parser.addListener("endpagemargin", endRule);
-        parser.addListener("endkeyframerule", endRule);
+        parser.addListener("endkeyframerule", endRule); 
 
     }
 
 });
-
 CSSLint.addRule({
     id: "overqualified-elements",
     name: "Disallow overqualified elements",
@@ -6996,7 +6760,7 @@ CSSLint.addRule({
     init: function(parser, reporter){
         var rule = this,
             classes = {};
-
+            
         parser.addListener("startrule", function(event){
             var selectors = event.selectors,
                 selector,
@@ -7009,13 +6773,13 @@ CSSLint.addRule({
 
                 for (j=0; j < selector.parts.length; j++){
                     part = selector.parts[j];
-                    if (part.type === parser.SELECTOR_PART_TYPE){
+                    if (part.type == parser.SELECTOR_PART_TYPE){
                         for (k=0; k < part.modifiers.length; k++){
                             modifier = part.modifiers[k];
-                            if (part.elementName && modifier.type === "id"){
+                            if (part.elementName && modifier.type == "id"){
                                 reporter.report("Element (" + part + ") is overqualified, just use " + modifier + " without element name.", part.line, part.col, rule);
-                            } else if (modifier.type === "class"){
-
+                            } else if (modifier.type == "class"){
+                                
                                 if (!classes[modifier]){
                                     classes[modifier] = [];
                                 }
@@ -7026,22 +6790,21 @@ CSSLint.addRule({
                 }
             }
         });
-
+        
         parser.addListener("endstylesheet", function(){
-
+        
             var prop;
             for (prop in classes){
                 if (classes.hasOwnProperty(prop)){
-                    if (classes[prop].length === 1 && classes[prop][0].part.elementName){
+                    if (classes[prop].length == 1 && classes[prop][0].part.elementName){
                         reporter.report("Element (" + classes[prop][0].part + ") is overqualified, just use " + classes[prop][0].modifier + " without element name.", classes[prop][0].part.line, classes[prop][0].part.col, rule);
                     }
                 }
-            }
+            }        
         });
     }
 
 });
-
 CSSLint.addRule({
     id: "qualified-headings",
     name: "Disallow qualified headings",
@@ -7061,7 +6824,7 @@ CSSLint.addRule({
 
                 for (j=0; j < selector.parts.length; j++){
                     part = selector.parts[j];
-                    if (part.type === parser.SELECTOR_PART_TYPE){
+                    if (part.type == parser.SELECTOR_PART_TYPE){
                         if (part.elementName && /h[1-6]/.test(part.elementName.toString()) && j > 0){
                             reporter.report("Heading (" + part.elementName + ") should not be qualified.", part.line, part.col, rule);
                         }
@@ -7072,7 +6835,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "regex-selectors",
     name: "Disallow selectors that look like regexs",
@@ -7092,10 +6854,10 @@ CSSLint.addRule({
                 selector = selectors[i];
                 for (j=0; j < selector.parts.length; j++){
                     part = selector.parts[j];
-                    if (part.type === parser.SELECTOR_PART_TYPE){
+                    if (part.type == parser.SELECTOR_PART_TYPE){
                         for (k=0; k < part.modifiers.length; k++){
                             modifier = part.modifiers[k];
-                            if (modifier.type === "attribute"){
+                            if (modifier.type == "attribute"){
                                 if (/([\~\|\^\$\*]=)/.test(modifier)){
                                     reporter.report("Attribute selectors with " + RegExp.$1 + " are slow!", modifier.line, modifier.col, rule);
                                 }
@@ -7109,14 +6871,14 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "rules-count",
     name: "Rules Count",
     desc: "Track how many rules there are.",
     browsers: "All",
     init: function(parser, reporter){
-        var count = 0;
+        var rule = this,
+            count = 0;
         parser.addListener("startrule", function(){
             count++;
         });
@@ -7127,7 +6889,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "selector-max-approaching",
     name: "Warn when approaching the 4095 selector limit for IE",
@@ -7136,19 +6897,18 @@ CSSLint.addRule({
     init: function(parser, reporter) {
         var rule = this, count = 0;
 
-        parser.addListener("startrule", function(event) {
+        parser.addListener('startrule', function(event) {
             count += event.selectors.length;
         });
 
         parser.addListener("endstylesheet", function() {
             if (count >= 3800) {
-                reporter.report("You have " + count + " selectors. Internet Explorer supports a maximum of 4095 selectors per stylesheet. Consider refactoring.",0,0,rule);
+                reporter.report("You have " + count + " selectors. Internet Explorer supports a maximum of 4095 selectors per stylesheet. Consider refactoring.",0,0,rule); 
             }
         });
     }
 
 });
-
 CSSLint.addRule({
     id: "selector-max",
     name: "Error when past the 4095 selector limit for IE",
@@ -7157,55 +6917,18 @@ CSSLint.addRule({
     init: function(parser, reporter){
         var rule = this, count = 0;
 
-        parser.addListener("startrule", function(event) {
+        parser.addListener('startrule',function(event) {
             count += event.selectors.length;
         });
 
         parser.addListener("endstylesheet", function() {
             if (count > 4095) {
-                reporter.report("You have " + count + " selectors. Internet Explorer supports a maximum of 4095 selectors per stylesheet. Consider refactoring.",0,0,rule);
+                reporter.report("You have " + count + " selectors. Internet Explorer supports a maximum of 4095 selectors per stylesheet. Consider refactoring.",0,0,rule); 
             }
         });
     }
 
 });
-
-CSSLint.addRule({
-    id: "selector-newline",
-    name: "Disallow new-line characters in selectors",
-    desc: "New-line characters in selectors are usually a forgotten comma and not a descendant combinator.",
-    browsers: "All",
-    init: function(parser, reporter) {
-        var rule = this;
-
-        function startRule(event) {
-            var i, len, selector, p, n, pLen, part, part2, type, currentLine, nextLine,
-                selectors = event.selectors;
-
-            for (i = 0, len = selectors.length; i < len; i++) {
-                selector = selectors[i];
-                for (p = 0, pLen = selector.parts.length; p < pLen; p++) {
-                    for (n = p + 1; n < pLen; n++) {
-                        part = selector.parts[p];
-                        part2 = selector.parts[n];
-                        type = part.type;
-                        currentLine = part.line;
-                        nextLine = part2.line;
-
-                        if (type === "descendant" && nextLine > currentLine) {
-                            reporter.report("newline character found in selector (forgot a comma?)", currentLine, selectors[i].parts[0].col, rule);
-                        }
-                    }
-                }
-
-            }
-        }
-
-        parser.addListener("startrule", startRule);
-
-    }
-});
-
 CSSLint.addRule({
     id: "shorthand",
     name: "Require shorthand properties",
@@ -7228,7 +6951,7 @@ CSSLint.addRule({
                     "padding-bottom",
                     "padding-left",
                     "padding-right"
-                ]
+                ]              
             };
         for (prop in mapping){
             if (mapping.hasOwnProperty(prop)){
@@ -7237,32 +6960,33 @@ CSSLint.addRule({
                 }
             }
         }
-
-        function startRule(){
+            
+        function startRule(event){
             properties = {};
         }
         function endRule(event){
-
+            
             var prop, i, len, total;
             for (prop in mapping){
                 if (mapping.hasOwnProperty(prop)){
                     total=0;
-
+                    
                     for (i=0, len=mapping[prop].length; i < len; i++){
                         total += properties[mapping[prop][i]] ? 1 : 0;
                     }
-
-                    if (total === mapping[prop].length){
+                    
+                    if (total == mapping[prop].length){
                         reporter.report("The properties " + mapping[prop].join(", ") + " can be replaced by " + prop + ".", event.line, event.col, rule);
                     }
                 }
             }
-        }
-
+        }        
+        
         parser.addListener("startrule", startRule);
         parser.addListener("startfontface", startRule);
         parser.addListener("property", function(event){
-            var name = event.property.toString().toLowerCase();
+            var name = event.property.toString().toLowerCase(),
+                value = event.value.parts[0].value;
 
             if (propertiesToCheck[name]){
                 properties[name] = 1;
@@ -7270,12 +6994,11 @@ CSSLint.addRule({
         });
 
         parser.addListener("endrule", endRule);
-        parser.addListener("endfontface", endRule);
+        parser.addListener("endfontface", endRule);     
 
     }
 
 });
-
 CSSLint.addRule({
     id: "star-property-hack",
     name: "Disallow properties with a star prefix",
@@ -7286,13 +7009,12 @@ CSSLint.addRule({
         parser.addListener("property", function(event){
             var property = event.property;
 
-            if (property.hack === "*") {
+            if (property.hack == "*") {
                 reporter.report("Property with star prefix found.", event.property.line, event.property.col, rule);
             }
         });
     }
 });
-
 CSSLint.addRule({
     id: "text-indent",
     name: "Disallow negative text-indent",
@@ -7304,12 +7026,12 @@ CSSLint.addRule({
             direction;
 
 
-        function startRule(){
+        function startRule(event){
             textIndent = false;
             direction = "inherit";
         }
-        function endRule(){
-            if (textIndent && direction !== "ltr"){
+        function endRule(event){
+            if (textIndent && direction != "ltr"){
                 reporter.report("Negative text-indent doesn't work well with RTL. If you use text-indent for image replacement explicitly set direction for that item to ltr.", textIndent.line, textIndent.col, rule);
             }
         }
@@ -7320,9 +7042,9 @@ CSSLint.addRule({
             var name = event.property.toString().toLowerCase(),
                 value = event.value;
 
-            if (name === "text-indent" && value.parts[0].value < -99){
+            if (name == "text-indent" && value.parts[0].value < -99){
                 textIndent = event.property;
-            } else if (name === "direction" && value.toString() === "ltr"){
+            } else if (name == "direction" && value == "ltr"){
                 direction = "ltr";
             }
         });
@@ -7333,7 +7055,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "underscore-property-hack",
     name: "Disallow properties with an underscore prefix",
@@ -7344,13 +7065,12 @@ CSSLint.addRule({
         parser.addListener("property", function(event){
             var property = event.property;
 
-            if (property.hack === "_") {
+            if (property.hack == "_") {
                 reporter.report("Property with underscore prefix found.", event.property.line, event.property.col, rule);
             }
         });
     }
 });
-
 CSSLint.addRule({
     id: "unique-headings",
     name: "Headings should only be defined once",
@@ -7359,7 +7079,7 @@ CSSLint.addRule({
     init: function(parser, reporter){
         var rule = this;
 
-        var headings = {
+        var headings =  {
                 h1: 0,
                 h2: 0,
                 h3: 0,
@@ -7380,14 +7100,14 @@ CSSLint.addRule({
                 part = selector.parts[selector.parts.length-1];
 
                 if (part.elementName && /(h[1-6])/i.test(part.elementName.toString())){
-
+                    
                     for (j=0; j < part.modifiers.length; j++){
-                        if (part.modifiers[j].type === "pseudo"){
+                        if (part.modifiers[j].type == "pseudo"){
                             pseudo = true;
                             break;
                         }
                     }
-
+                
                     if (!pseudo){
                         headings[RegExp.$1]++;
                         if (headings[RegExp.$1] > 1) {
@@ -7397,11 +7117,11 @@ CSSLint.addRule({
                 }
             }
         });
-
-        parser.addListener("endstylesheet", function(){
+        
+        parser.addListener("endstylesheet", function(event){
             var prop,
                 messages = [];
-
+                
             for (prop in headings){
                 if (headings.hasOwnProperty(prop)){
                     if (headings[prop] > 1){
@@ -7409,15 +7129,14 @@ CSSLint.addRule({
                     }
                 }
             }
-
+            
             if (messages.length){
                 reporter.rollupWarn("You have " + messages.join(", ") + " defined in this stylesheet.", rule);
             }
-        });
+        });        
     }
 
 });
-
 CSSLint.addRule({
     id: "universal-selector",
     name: "Disallow universal selector",
@@ -7430,13 +7149,14 @@ CSSLint.addRule({
             var selectors = event.selectors,
                 selector,
                 part,
-                i;
+                modifier,
+                i, j, k;
 
             for (i=0; i < selectors.length; i++){
                 selector = selectors[i];
-
+                
                 part = selector.parts[selector.parts.length-1];
-                if (part.elementName === "*"){
+                if (part.elementName == "*"){
                     reporter.report(rule.desc, part.line, part.col, rule);
                 }
             }
@@ -7444,7 +7164,6 @@ CSSLint.addRule({
     }
 
 });
-
 CSSLint.addRule({
     id: "unqualified-attributes",
     name: "Disallow unqualified attribute selectors",
@@ -7454,32 +7173,31 @@ CSSLint.addRule({
         var rule = this;
 
         parser.addListener("startrule", function(event){
-
+            
             var selectors = event.selectors,
                 selector,
                 part,
                 modifier,
-                i, k;
+                i, j, k;
 
             for (i=0; i < selectors.length; i++){
                 selector = selectors[i];
-
+                
                 part = selector.parts[selector.parts.length-1];
-                if (part.type === parser.SELECTOR_PART_TYPE){
+                if (part.type == parser.SELECTOR_PART_TYPE){
                     for (k=0; k < part.modifiers.length; k++){
                         modifier = part.modifiers[k];
-                        if (modifier.type === "attribute" && (!part.elementName || part.elementName === "*")){
-                            reporter.report(rule.desc, part.line, part.col, rule);
+                        if (modifier.type == "attribute" && (!part.elementName || part.elementName == "*")){
+                            reporter.report(rule.desc, part.line, part.col, rule);                               
                         }
                     }
                 }
-
-            }
+                
+            }            
         });
     }
 
 });
-
 CSSLint.addRule({
     id: "vendor-prefix",
     name: "Require standard property with vendor prefix",
@@ -7495,67 +7213,71 @@ CSSLint.addRule({
                 "-webkit-border-top-right-radius": "border-top-right-radius",
                 "-webkit-border-bottom-left-radius": "border-bottom-left-radius",
                 "-webkit-border-bottom-right-radius": "border-bottom-right-radius",
-
+                
                 "-o-border-radius": "border-radius",
                 "-o-border-top-left-radius": "border-top-left-radius",
                 "-o-border-top-right-radius": "border-top-right-radius",
                 "-o-border-bottom-left-radius": "border-bottom-left-radius",
                 "-o-border-bottom-right-radius": "border-bottom-right-radius",
-
+                
                 "-moz-border-radius": "border-radius",
                 "-moz-border-radius-topleft": "border-top-left-radius",
                 "-moz-border-radius-topright": "border-top-right-radius",
                 "-moz-border-radius-bottomleft": "border-bottom-left-radius",
-                "-moz-border-radius-bottomright": "border-bottom-right-radius",
-
+                "-moz-border-radius-bottomright": "border-bottom-right-radius",                
+                
                 "-moz-column-count": "column-count",
                 "-webkit-column-count": "column-count",
-
+                
                 "-moz-column-gap": "column-gap",
                 "-webkit-column-gap": "column-gap",
-
+                
                 "-moz-column-rule": "column-rule",
                 "-webkit-column-rule": "column-rule",
-
+                
                 "-moz-column-rule-style": "column-rule-style",
                 "-webkit-column-rule-style": "column-rule-style",
-
+                
                 "-moz-column-rule-color": "column-rule-color",
                 "-webkit-column-rule-color": "column-rule-color",
-
+                
                 "-moz-column-rule-width": "column-rule-width",
                 "-webkit-column-rule-width": "column-rule-width",
-
+                
                 "-moz-column-width": "column-width",
                 "-webkit-column-width": "column-width",
-
+                
                 "-webkit-column-span": "column-span",
                 "-webkit-columns": "columns",
-
+                
                 "-moz-box-shadow": "box-shadow",
                 "-webkit-box-shadow": "box-shadow",
-
+                
                 "-moz-transform" : "transform",
                 "-webkit-transform" : "transform",
                 "-o-transform" : "transform",
                 "-ms-transform" : "transform",
-
+                
                 "-moz-transform-origin" : "transform-origin",
                 "-webkit-transform-origin" : "transform-origin",
                 "-o-transform-origin" : "transform-origin",
                 "-ms-transform-origin" : "transform-origin",
-
+                
                 "-moz-box-sizing" : "box-sizing",
-                "-webkit-box-sizing" : "box-sizing"
+                "-webkit-box-sizing" : "box-sizing",
+                
+                "-moz-user-select" : "user-select",
+                "-khtml-user-select" : "user-select",
+                "-webkit-user-select" : "user-select"                
             };
         function startRule(){
             properties = {};
-            num = 1;
+            num=1;        
         }
-        function endRule(){
+        function endRule(event){
             var prop,
-                i,
-                len,
+                i, len,
+                standard,
                 needed,
                 actual,
                 needsStandard = [];
@@ -7570,7 +7292,7 @@ CSSLint.addRule({
                 needed = needsStandard[i].needed;
                 actual = needsStandard[i].actual;
 
-                if (!properties[needed]){
+                if (!properties[needed]){               
                     reporter.report("Missing standard property '" + needed + "' to go along with '" + actual + "'.", properties[actual][0].name.line, properties[actual][0].name.col, rule);
                 } else {
                     if (properties[needed][0].pos < properties[actual][0].pos){
@@ -7579,13 +7301,13 @@ CSSLint.addRule({
                 }
             }
 
-        }
-
+        }        
+        
         parser.addListener("startrule", startRule);
         parser.addListener("startfontface", startRule);
         parser.addListener("startpage", startRule);
         parser.addListener("startpagemargin", startRule);
-        parser.addListener("startkeyframerule", startRule);
+        parser.addListener("startkeyframerule", startRule);         
 
         parser.addListener("property", function(event){
             var name = event.property.text.toLowerCase();
@@ -7601,11 +7323,10 @@ CSSLint.addRule({
         parser.addListener("endfontface", endRule);
         parser.addListener("endpage", endRule);
         parser.addListener("endpagemargin", endRule);
-        parser.addListener("endkeyframerule", endRule);
+        parser.addListener("endkeyframerule", endRule);         
     }
 
 });
-
 CSSLint.addRule({
     id: "zero-units",
     name: "Disallow units for 0 values",
@@ -7615,11 +7336,11 @@ CSSLint.addRule({
         var rule = this;
         parser.addListener("property", function(event){
             var parts = event.value.parts,
-                i = 0,
+                i = 0, 
                 len = parts.length;
 
             while(i < len){
-                if ((parts[i].units || parts[i].type === "percentage") && parts[i].value === 0 && parts[i].type !== "time"){
+                if ((parts[i].units || parts[i].type == "percentage") && parts[i].value === 0 && parts[i].type != "time"){
                     reporter.report("Values of 0 shouldn't have units specified.", parts[i].line, parts[i].col, rule);
                 }
                 i++;
@@ -7630,13 +7351,12 @@ CSSLint.addRule({
     }
 
 });
-
 (function() {
     var xmlEscape = function(str) {
         if (!str || str.constructor !== String) {
             return "";
         }
-
+        
         return str.replace(/[\"&><]/g, function(match) {
             switch (match) {
                 case "\"":
@@ -7646,7 +7366,7 @@ CSSLint.addRule({
                 case "<":
                     return "&lt;";
                 case ">":
-                    return "&gt;";
+                    return "&gt;";            
             }
         });
     };
@@ -7663,23 +7383,23 @@ CSSLint.addRule({
         readError: function(filename, message) {
             return "<file name=\"" + xmlEscape(filename) + "\"><error line=\"0\" column=\"0\" severty=\"error\" message=\"" + xmlEscape(message) + "\"></error></file>";
         },
-        formatResults: function(results, filename/*, options*/) {
+        formatResults: function(results, filename, options) {
             var messages = results.messages,
                 output = [];
             var generateSource = function(rule) {
-                if (!rule || !("name" in rule)) {
+                if (!rule || !('name' in rule)) {
                     return "";
                 }
-                return "net.csslint." + rule.name.replace(/\s/g,"");
+                return 'net.csslint.' + rule.name.replace(/\s/g,'');
             };
 
 
 
             if (messages.length > 0) {
                 output.push("<file name=\""+filename+"\">");
-                CSSLint.Util.forEach(messages, function (message) {
+                CSSLint.Util.forEach(messages, function (message, i) {
                     if (!message.rollup) {
-                        output.push("<error line=\"" + message.line + "\" column=\"" + message.col + "\" severity=\"" + message.type + "\"" +
+                      output.push("<error line=\"" + message.line + "\" column=\"" + message.col + "\" severity=\"" + message.type + "\"" +
                           " message=\"" + xmlEscape(message.message) + "\" source=\"" + generateSource(message.rule) +"\"/>");
                     }
                 });
@@ -7691,7 +7411,6 @@ CSSLint.addRule({
     });
 
 }());
-
 CSSLint.addFormatter({
     id: "compact",
     name: "Compact, 'porcelain' format",
@@ -7710,22 +7429,21 @@ CSSLint.addFormatter({
         };
 
         if (messages.length === 0) {
-              return options.quiet ? "" : filename + ": Lint Free!";
+            return options.quiet ? "" : filename + ": Lint Free!";
         }
 
-        CSSLint.Util.forEach(messages, function(message) {
+        CSSLint.Util.forEach(messages, function(message, i) {
             if (message.rollup) {
                 output += filename + ": " + capitalize(message.type) + " - " + message.message + "\n";
             } else {
-                output += filename + ": " + "line " + message.line +
+                output += filename + ": " + "line " + message.line + 
                     ", col " + message.col + ", " + capitalize(message.type) + " - " + message.message + " (" + message.rule.id + ")\n";
             }
         });
-
+    
         return output;
     }
 });
-
 CSSLint.addFormatter({
     id: "csslint-xml",
     name: "CSSLint XML format",
@@ -7735,7 +7453,7 @@ CSSLint.addFormatter({
     endFormat: function(){
         return "</csslint>";
     },
-    formatResults: function(results, filename/*, options*/) {
+    formatResults: function(results, filename, options) {
         var messages = results.messages,
             output = [];
         var escapeSpecialCharacters = function(str) {
@@ -7747,7 +7465,7 @@ CSSLint.addFormatter({
 
         if (messages.length > 0) {
             output.push("<file name=\""+filename+"\">");
-            CSSLint.Util.forEach(messages, function (message) {
+            CSSLint.Util.forEach(messages, function (message, i) {
                 if (message.rollup) {
                     output.push("<issue severity=\"" + message.type + "\" reason=\"" + escapeSpecialCharacters(message.message) + "\" evidence=\"" + escapeSpecialCharacters(message.evidence) + "\"/>");
                 } else {
@@ -7761,7 +7479,6 @@ CSSLint.addFormatter({
         return output.join("");
     }
 });
-
 CSSLint.addFormatter({
     id: "junit-xml",
     name: "JUNIT XML format",
@@ -7771,19 +7488,19 @@ CSSLint.addFormatter({
     endFormat: function() {
         return "</testsuites>";
     },
-    formatResults: function(results, filename/*, options*/) {
+    formatResults: function(results, filename, options) {
 
         var messages = results.messages,
             output = [],
             tests = {
-                "error": 0,
-                "failure": 0
+                'error': 0,
+                'failure': 0
             };
         var generateSource = function(rule) {
-            if (!rule || !("name" in rule)) {
+            if (!rule || !('name' in rule)) {
                 return "";
             }
-            return "net.csslint." + rule.name.replace(/\s/g,"");
+            return 'net.csslint.' + rule.name.replace(/\s/g,'');
         };
         var escapeSpecialCharacters = function(str) {
 
@@ -7797,11 +7514,11 @@ CSSLint.addFormatter({
 
         if (messages.length > 0) {
 
-            messages.forEach(function (message) {
-                var type = message.type === "warning" ? "error" : message.type;
+            messages.forEach(function (message, i) {
+                var type = message.type === 'warning' ? 'error' : message.type;
                 if (!message.rollup) {
                     output.push("<testcase time=\"0\" name=\"" + generateSource(message.rule) + "\">");
-                    output.push("<" + type + " message=\"" + escapeSpecialCharacters(message.message) + "\"><![CDATA[" + message.line + ":" + message.col + ":" + escapeSpecialCharacters(message.evidence)  + "]]></" + type + ">");
+                    output.push("<" + type + " message=\"" + escapeSpecialCharacters(message.message) + "\"><![CDATA[" + message.line + ':' + message.col + ':' + escapeSpecialCharacters(message.evidence)  + "]]></" + type + ">");
                     output.push("</testcase>");
 
                     tests[type] += 1;
@@ -7819,7 +7536,6 @@ CSSLint.addFormatter({
 
     }
 });
-
 CSSLint.addFormatter({
     id: "lint-xml",
     name: "Lint XML format",
@@ -7829,7 +7545,7 @@ CSSLint.addFormatter({
     endFormat: function(){
         return "</lint>";
     },
-    formatResults: function(results, filename/*, options*/) {
+    formatResults: function(results, filename, options) {
         var messages = results.messages,
             output = [];
         var escapeSpecialCharacters = function(str) {
@@ -7840,9 +7556,9 @@ CSSLint.addFormatter({
         };
 
         if (messages.length > 0) {
-
+        
             output.push("<file name=\""+filename+"\">");
-            CSSLint.Util.forEach(messages, function (message) {
+            CSSLint.Util.forEach(messages, function (message, i) {
                 if (message.rollup) {
                     output.push("<issue severity=\"" + message.type + "\" reason=\"" + escapeSpecialCharacters(message.message) + "\" evidence=\"" + escapeSpecialCharacters(message.evidence) + "\"/>");
                 } else {
@@ -7856,7 +7572,6 @@ CSSLint.addFormatter({
         return output.join("");
     }
 });
-
 CSSLint.addFormatter({
     id: "text",
     name: "Plain Text",
@@ -7875,19 +7590,12 @@ CSSLint.addFormatter({
             return options.quiet ? "" : "\n\ncsslint: No errors in " + filename + ".";
         }
 
-        output = "\n\ncsslint: There ";
-        if (messages.length === 1) {
-            output += "is 1 problem";
-        } else {
-            output += "are " + messages.length  +  " problems";
-        }
-        output += " in " + filename + ".";
-
+        output = "\n\ncsslint: There are " + messages.length  +  " problems in " + filename + ".";
         var pos = filename.lastIndexOf("/"),
             shortFilename = filename;
 
         if (pos === -1){
-            pos = filename.lastIndexOf("\\");
+            pos = filename.lastIndexOf("\\");       
         }
         if (pos > -1){
             shortFilename = filename.substring(pos+1);
@@ -7904,12 +7612,12 @@ CSSLint.addFormatter({
                 output += "\n" + message.evidence;
             }
         });
-
+    
         return output;
     }
 });
 
-module.exports.CSSLint = CSSLint;
+exports.CSSLint = CSSLint;
 
 });
 
@@ -7925,11 +7633,8 @@ var Worker = exports.Worker = function(sender) {
     Mirror.call(this, sender);
     this.setTimeout(400);
     this.ruleset = null;
-    this.setDisabledRules("ids|order-alphabetical");
-    this.setInfoRules(
-      "adjoining-classes|qualified-headings|zero-units|gradients|" +
-      "import|outline-none|vendor-prefix"
-    );
+    this.setDisabledRules("ids");
+    this.setInfoRules("adjoining-classes|qualified-headings|zero-units|gradients|import|outline-none");
 };
 
 oop.inherits(Worker, Mirror);
@@ -7965,11 +7670,11 @@ oop.inherits(Worker, Mirror);
     this.onUpdate = function() {
         var value = this.doc.getValue();
         if (!value)
-            return this.sender.emit("annotate", []);
+            return this.sender.emit("csslint", []);
         var infoRules = this.infoRules;
 
         var result = CSSLint.verify(value, this.ruleset);
-        this.sender.emit("annotate", result.messages.map(function(msg) {
+        this.sender.emit("csslint", result.messages.map(function(msg) {
             return {
                 row: msg.line - 1,
                 column: msg.col - 1,

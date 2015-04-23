@@ -117,7 +117,6 @@ var Mode = function() {
 oop.inherits(Mode, TextMode);
 
 (function() {
-    this.type = "text";
     this.getNextLineIndent = function(state, line, tab) {
         if (state == "intag")
             return tab;

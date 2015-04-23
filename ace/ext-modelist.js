@@ -35,7 +35,6 @@ Mode.prototype.supportsFile = function(filename) {
 };
 var supportedModes = {
     ABAP:        ["abap"],
-    ABC:         ["abc"],
     ActionScript:["as"],
     ADA:         ["ada|adb"],
     Apache_Conf: ["^htaccess|^htgroups|^htpasswd|^conf|htaccess|htgroups|htpasswd"],
@@ -58,18 +57,11 @@ var supportedModes = {
     Diff:        ["diff|patch"],
     Dockerfile:  ["^Dockerfile"],
     Dot:         ["dot"],
-    Dummy:       ["dummy"],
-    DummySyntax: ["dummy"],
-    Eiffel:      ["e"],
-    EJS:         ["ejs"],
-    Elixir:      ["ex|exs"],
-    Elm:         ["elm"],
     Erlang:      ["erl|hrl"],
+    EJS:         ["ejs"],
     Forth:       ["frt|fs|ldr"],
     FTL:         ["ftl"],
-    Gcode:       ["gcode"],
     Gherkin:     ["feature"],
-    Gitignore:   ["^.gitignore"],
     Glsl:        ["glsl|frag|vert"],
     golang:      ["go"],
     Groovy:      ["groovy"],
@@ -80,7 +72,6 @@ var supportedModes = {
     HTML:        ["html|htm|xhtml"],
     HTML_Ruby:   ["erb|rhtml|html.erb"],
     INI:         ["ini|conf|cfg|prefs"],
-    Io:          ["io"],
     Jack:        ["jack"],
     Jade:        ["jade"],
     Java:        ["java"],
@@ -91,7 +82,6 @@ var supportedModes = {
     JSX:         ["jsx"],
     Julia:       ["jl"],
     LaTeX:       ["tex|latex|ltx|bib"],
-    Lean:        ["lean|hlean"],
     LESS:        ["less"],
     Liquid:      ["liquid"],
     Lisp:        ["lisp"],
@@ -102,12 +92,11 @@ var supportedModes = {
     LuaPage:     ["lp"],
     Lucene:      ["lucene"],
     Makefile:    ["^Makefile|^GNUmakefile|^makefile|^OCamlMakefile|make"],
-    Markdown:    ["md|markdown"],
-    Mask:        ["mask"],
     MATLAB:      ["matlab"],
+    Markdown:    ["md|markdown"],
     MEL:         ["mel"],
-    MUSHCode:    ["mc|mush"],
     MySQL:       ["mysql"],
+    MUSHCode:    ["mc|mush"],
     Nix:         ["nix"],
     ObjectiveC:  ["m|mm"],
     OCaml:       ["ml|mli"],
@@ -116,7 +105,6 @@ var supportedModes = {
     pgSQL:       ["pgsql"],
     PHP:         ["php|phtml"],
     Powershell:  ["ps1"],
-    Praat:       ["praat|praatscript|psc|proc"],
     Prolog:      ["plg|prolog"],
     Properties:  ["properties"],
     Protobuf:    ["proto"],
@@ -129,14 +117,14 @@ var supportedModes = {
     SASS:        ["sass"],
     SCAD:        ["scad"],
     Scala:       ["scala"],
+    Smarty:      ["smarty|tpl"],
     Scheme:      ["scm|rkt"],
     SCSS:        ["scss"],
     SH:          ["sh|bash|^.bashrc"],
     SJS:         ["sjs"],
-    Smarty:      ["smarty|tpl"],
+    Space:       ["space"],
     snippets:    ["snippets"],
     Soy_Template:["soy"],
-    Space:       ["space"],
     SQL:         ["sql"],
     Stylus:      ["styl|stylus"],
     SVG:         ["svg"],
@@ -148,21 +136,19 @@ var supportedModes = {
     Twig:        ["twig"],
     Typescript:  ["ts|typescript|str"],
     Vala:        ["vala"],
-    VBScript:    ["vbs|vb"],
+    VBScript:    ["vbs"],
     Velocity:    ["vm"],
     Verilog:     ["v|vh|sv|svh"],
-    VHDL:        ["vhd|vhdl"],
-    XML:         ["xml|rdf|rss|wsdl|xslt|atom|mathml|mml|xul|xbl|xaml"],
+    XML:         ["xml|rdf|rss|wsdl|xslt|atom|mathml|mml|xul|xbl"],
     XQuery:      ["xq"],
-    YAML:        ["yaml|yml"],
-    Django:      ["html"]
+    YAML:        ["yaml|yml"]
 };
 
 var nameOverrides = {
     ObjectiveC: "Objective-C",
     CSharp: "C#",
     golang: "Go",
-    C_Cpp: "C and C++",
+    C_Cpp: "C/C++",
     coffee: "CoffeeScript",
     HTML_Ruby: "HTML (Ruby)",
     FTL: "FreeMarker"
@@ -184,6 +170,7 @@ module.exports = {
 };
 
 });
+;
                 (function() {
                     ace.require(["ace/ext/modelist"], function() {});
                 })();

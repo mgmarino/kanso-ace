@@ -454,10 +454,6 @@ var SnippetManager = function() {
         var snippetMap = this.snippetMap;
         var snippetNameMap = this.snippetNameMap;
         var self = this;
-        
-        if (!snippets) 
-            snippets = [];
-        
         function wrapRegexp(src) {
             if (src && !/^\^?\(.*\)\$?$|^\\b$/.test(src))
                 src = "(?:" + src + ")";
@@ -510,7 +506,7 @@ var SnippetManager = function() {
             s.endTriggerRe = new RegExp(s.endTrigger, "", true);
         }
 
-        if (snippets && snippets.content)
+        if (snippets.content)
             addSnippet(snippets);
         else if (Array.isArray(snippets))
             snippets.forEach(addSnippet);
@@ -925,7 +921,6 @@ var $singleLineEditor = function(el) {
     editor.renderer.setHighlightGutterLine(false);
 
     editor.$mouseHandler.$focusWaitTimout = 0;
-    editor.$highlightTagPending = true;
 
     return editor;
 };
@@ -941,7 +936,6 @@ var AcePopup = function(parentNode) {
     popup.renderer.setStyle("ace_autocomplete");
 
     popup.setOption("displayIndentGuides", false);
-    popup.setOption("dragDelay", 150);
 
     var noop = function(){};
 
@@ -976,7 +970,7 @@ var AcePopup = function(parentNode) {
             popup.session.removeMarker(hoverMarker.id);
             hoverMarker.id = null;
         }
-    };
+    }
     popup.setSelectOnHover(false);
     popup.on("mousemove", function(e) {
         if (!lastMouseEvent) {
@@ -1044,15 +1038,15 @@ var AcePopup = function(parentNode) {
     };
 
     var bgTokenizer = popup.session.bgTokenizer;
-    bgTokenizer.$tokenizeRow = function(row) {
-        var data = popup.data[row];
+    bgTokenizer.$tokenizeRow = function(i) {
+        var data = popup.data[i];
         var tokens = [];
         if (!data)
             return tokens;
         if (typeof data == "string")
             data = {value: data};
         if (!data.caption)
-            data.caption = data.value || data.name;
+            data.caption = data.value;
 
         var last = -1;
         var flag, c;
@@ -1069,11 +1063,8 @@ var AcePopup = function(parentNode) {
 
         if (data.meta) {
             var maxW = popup.renderer.$size.scrollerWidth / popup.renderer.layerConfig.characterWidth;
-            var metaData = data.meta;
-            if (metaData.length + data.caption.length > maxW - 2) {
-                metaData = metaData.substr(0, maxW - data.caption.length - 3) + "\u2026"
-            }
-            tokens.push({type: "rightAlignedText", value: metaData});
+            if (data.meta.length + data.caption.length < maxW - 2)
+                tokens.push({type: "rightAlignedText", value: data.meta});
         }
         return tokens;
     };
@@ -1082,9 +1073,7 @@ var AcePopup = function(parentNode) {
 
     popup.session.$computeWidth = function() {
         return this.screenWidth = 0;
-    };
-
-    popup.$blockScrolling = Infinity;
+    }
     popup.isOpen = false;
     popup.isTopdown = false;
 
@@ -1116,7 +1105,6 @@ var AcePopup = function(parentNode) {
     popup.on("changeSelection", function() {
         if (popup.isOpen)
             popup.setRow(popup.selection.lead.row);
-        popup.renderer.scrollCursorIntoView();
     });
 
     popup.hide = function() {
@@ -1257,7 +1245,7 @@ exports.retrieveFollowingIdentifier = function(text, pos, regex) {
 
 });
 
-ace.define("ace/autocomplete",["require","exports","module","ace/keyboard/hash_handler","ace/autocomplete/popup","ace/autocomplete/util","ace/lib/event","ace/lib/lang","ace/lib/dom","ace/snippets"], function(require, exports, module) {
+ace.define("ace/autocomplete",["require","exports","module","ace/keyboard/hash_handler","ace/autocomplete/popup","ace/autocomplete/util","ace/lib/event","ace/lib/lang","ace/snippets"], function(require, exports, module) {
 "use strict";
 
 var HashHandler = require("./keyboard/hash_handler").HashHandler;
@@ -1265,14 +1253,11 @@ var AcePopup = require("./autocomplete/popup").AcePopup;
 var util = require("./autocomplete/util");
 var event = require("./lib/event");
 var lang = require("./lib/lang");
-var dom = require("./lib/dom");
 var snippetManager = require("./snippets").snippetManager;
 
 var Autocomplete = function() {
-    this.autoInsert = false;
+    this.autoInsert = true;
     this.autoSelect = true;
-    this.exactMatch = false;
-    this.gatherCompletionsId = 0;
     this.keyboardHandler = new HashHandler();
     this.keyboardHandler.bindKeys(this.commands);
 
@@ -1284,11 +1269,10 @@ var Autocomplete = function() {
     this.changeTimer = lang.delayedCall(function() {
         this.updateCompletions(true);
     }.bind(this));
-
-    this.tooltipTimer = lang.delayedCall(this.updateDocTooltip.bind(this), 50);
 };
 
 (function() {
+    this.gatherCompletionsId = 0;
 
     this.$init = function() {
         this.popup = new AcePopup(document.body || document.documentElement);
@@ -1297,14 +1281,6 @@ var Autocomplete = function() {
             e.stop();
         }.bind(this));
         this.popup.focus = this.editor.focus.bind(this.editor);
-        this.popup.on("show", this.tooltipTimer.bind(null, null));
-        this.popup.on("select", this.tooltipTimer.bind(null, null));
-        this.popup.on("changeHoverMarker", this.tooltipTimer.bind(null, null));
-        return this.popup;
-    };
-
-    this.getPopup = function() {
-        return this.popup || this.$init();
     };
 
     this.openPopup = function(editor, prefix, keepPopupPosition) {
@@ -1313,8 +1289,6 @@ var Autocomplete = function() {
 
         this.popup.setData(this.completions.filtered);
 
-        editor.keyBinding.addKeyboardHandler(this.keyboardHandler);
-        
         var renderer = editor.renderer;
         this.popup.setRow(this.autoSelect ? 0 : -1);
         if (!keepPopupPosition) {
@@ -1332,8 +1306,6 @@ var Autocomplete = function() {
             pos.left += renderer.$gutterLayer.gutterWidth;
 
             this.popup.show(pos, lineHeight);
-        } else if (keepPopupPosition && !prefix) {
-            this.detach();
         }
     };
 
@@ -1344,14 +1316,14 @@ var Autocomplete = function() {
         this.editor.off("mousedown", this.mousedownListener);
         this.editor.off("mousewheel", this.mousewheelListener);
         this.changeTimer.cancel();
-        this.hideDocTooltip();
 
-        this.gatherCompletionsId += 1;
-        if (this.popup && this.popup.isOpen)
+        if (this.popup && this.popup.isOpen) {
+            this.gatherCompletionsId = this.gatherCompletionsId + 1;
+        }
+
+        if (this.popup)
             this.popup.hide();
 
-        if (this.base)
-            this.base.detach();
         this.activated = false;
         this.completions = this.base = null;
     };
@@ -1367,15 +1339,10 @@ var Autocomplete = function() {
             this.detach();
     };
 
-    this.blurListener = function(e) {
+    this.blurListener = function() {
         var el = document.activeElement;
-        var text = this.editor.textInput.getElement()
-        if (el != text && el.parentNode != this.popup.container
-            && el != this.tooltipNode && e.relatedTarget != this.tooltipNode
-            && e.relatedTarget != text
-        ) {
+        if (el != this.editor.textInput.getElement() && el.parentNode != this.popup.container)
             this.detach();
-        }
     };
 
     this.mousedownListener = function(e) {
@@ -1407,7 +1374,7 @@ var Autocomplete = function() {
             return false;
 
         if (data.completer && data.completer.insertMatch) {
-            data.completer.insertMatch(this.editor, data);
+            data.completer.insertMatch(this.editor);
         } else {
             if (this.completions.filterText) {
                 var ranges = this.editor.selection.getAllRanges();
@@ -1423,7 +1390,6 @@ var Autocomplete = function() {
         }
         this.detach();
     };
-
 
     this.commands = {
         "Up": function(editor) { editor.completer.goTo("up"); },
@@ -1454,8 +1420,8 @@ var Autocomplete = function() {
         var line = session.getLine(pos.row);
         var prefix = util.retrievePrecedingIdentifier(line, pos.column);
 
-        this.base = session.doc.createAnchor(pos.row, pos.column - prefix.length);
-        this.base.$insertRight = true;
+        this.base = editor.getCursorPosition();
+        this.base.column -= prefix.length;
 
         var matches = [];
         var total = editor.completers.length;
@@ -1488,6 +1454,7 @@ var Autocomplete = function() {
             editor.completer = this;
         }
 
+        editor.keyBinding.addKeyboardHandler(this.keyboardHandler);
         editor.on("changeSelection", this.changeListener);
         editor.on("blur", this.blurListener);
         editor.on("mousedown", this.mousedownListener);
@@ -1521,24 +1488,20 @@ var Autocomplete = function() {
 
             var prefix = results.prefix;
             var matches = results && results.matches;
-
+            
             if (!matches || !matches.length)
                 return detachIfFinished();
             if (prefix.indexOf(results.prefix) !== 0 || _id != this.gatherCompletionsId)
                 return;
 
             this.completions = new FilteredList(matches);
-
-            if (this.exactMatch)
-                this.completions.exactMatch = true;
-
             this.completions.setFilter(prefix);
             var filtered = this.completions.filtered;
             if (!filtered.length)
                 return detachIfFinished();
             if (filtered.length == 1 && filtered[0].value == prefix && !filtered[0].snippet)
                 return detachIfFinished();
-            if (this.autoInsert && filtered.length == 1 && results.finished)
+            if (this.autoInsert && filtered.length == 1)
                 return this.insertMatch(filtered[0]);
 
             this.openPopup(this.editor, prefix, keepPopupPosition);
@@ -1549,73 +1512,6 @@ var Autocomplete = function() {
         this.editor.$mouseHandler.cancelContextMenu();
     };
 
-    this.updateDocTooltip = function() {
-        var popup = this.popup;
-        var all = popup.data;
-        var selected = all && (all[popup.getHoveredRow()] || all[popup.getRow()]);
-        var doc = null;
-        if (!selected || !this.editor || !this.popup.isOpen)
-            return this.hideDocTooltip();
-        this.editor.completers.some(function(completer) {
-            if (completer.getDocTooltip)
-                doc = completer.getDocTooltip(selected);
-            return doc;
-        });
-        if (!doc)
-            doc = selected;
-
-        if (typeof doc == "string")
-            doc = {docText: doc}
-        if (!doc || !(doc.docHTML || doc.docText))
-            return this.hideDocTooltip();
-        this.showDocTooltip(doc);
-    };
-
-    this.showDocTooltip = function(item) {
-        if (!this.tooltipNode) {
-            this.tooltipNode = dom.createElement("div");
-            this.tooltipNode.className = "ace_tooltip ace_doc-tooltip";
-            this.tooltipNode.style.margin = 0;
-            this.tooltipNode.style.pointerEvents = "auto";
-            this.tooltipNode.tabIndex = -1;
-            this.tooltipNode.onblur = this.blurListener.bind(this);
-        }
-
-        var tooltipNode = this.tooltipNode;
-        if (item.docHTML) {
-            tooltipNode.innerHTML = item.docHTML;
-        } else if (item.docText) {
-            tooltipNode.textContent = item.docText;
-        }
-
-        if (!tooltipNode.parentNode)
-            document.body.appendChild(tooltipNode);
-        var popup = this.popup;
-        var rect = popup.container.getBoundingClientRect();
-        tooltipNode.style.top = popup.container.style.top;
-        tooltipNode.style.bottom = popup.container.style.bottom;
-
-        if (window.innerWidth - rect.right < 320) {
-            tooltipNode.style.right = window.innerWidth - rect.left + "px";
-            tooltipNode.style.left = "";
-        } else {
-            tooltipNode.style.left = (rect.right + 1) + "px";
-            tooltipNode.style.right = "";
-        }
-        tooltipNode.style.display = "block";
-    };
-
-    this.hideDocTooltip = function() {
-        this.tooltipTimer.cancel();
-        if (!this.tooltipNode) return;
-        var el = this.tooltipNode;
-        if (!this.editor.isFocused() && document.activeElement == el)
-            this.editor.focus();
-        this.tooltipNode = null;
-        if (el.parentNode)
-            el.parentNode.removeChild(el);
-    };
-
 }).call(Autocomplete.prototype);
 
 Autocomplete.startCommand = {
@@ -1623,7 +1519,7 @@ Autocomplete.startCommand = {
     exec: function(editor) {
         if (!editor.completer)
             editor.completer = new Autocomplete();
-        editor.completer.autoInsert = false;
+        editor.completer.autoInsert = 
         editor.completer.autoSelect = true;
         editor.completer.showPopup(editor);
         editor.completer.cancelContextMenu();
@@ -1635,7 +1531,6 @@ var FilteredList = function(array, filterText, mutateData) {
     this.all = array;
     this.filtered = array;
     this.filterText = filterText || "";
-    this.exactMatch = false;
 };
 (function(){
     this.setFilter = function(str) {
@@ -1651,7 +1546,7 @@ var FilteredList = function(array, filterText, mutateData) {
         });
         var prev = null;
         matches = matches.filter(function(item){
-            var caption = item.snippet || item.caption || item.value;
+            var caption = item.value || item.caption || item.snippet;
             if (caption === prev) return false;
             prev = caption;
             return true;
@@ -1670,26 +1565,20 @@ var FilteredList = function(array, filterText, mutateData) {
             var matchMask = 0;
             var penalty = 0;
             var index, distance;
-
-            if (this.exactMatch) {
-                if (needle !== caption.substr(0, needle.length))
+            for (var j = 0; j < needle.length; j++) {
+                var i1 = caption.indexOf(lower[j], lastIndex + 1);
+                var i2 = caption.indexOf(upper[j], lastIndex + 1);
+                index = (i1 >= 0) ? ((i2 < 0 || i1 < i2) ? i1 : i2) : i2;
+                if (index < 0)
                     continue loop;
-            }else{
-                for (var j = 0; j < needle.length; j++) {
-                    var i1 = caption.indexOf(lower[j], lastIndex + 1);
-                    var i2 = caption.indexOf(upper[j], lastIndex + 1);
-                    index = (i1 >= 0) ? ((i2 < 0 || i1 < i2) ? i1 : i2) : i2;
-                    if (index < 0)
-                        continue loop;
-                    distance = index - lastIndex - 1;
-                    if (distance > 0) {
-                        if (lastIndex === -1)
-                            penalty += 10;
-                        penalty += distance;
-                    }
-                    matchMask = matchMask | (1 << index);
-                    lastIndex = index;
+                distance = index - lastIndex - 1;
+                if (distance > 0) {
+                    if (lastIndex === -1)
+                        penalty += 10;
+                    penalty += distance;
                 }
+                matchMask = matchMask | (1 << index);
+                lastIndex = index;
             }
             item.matchMask = matchMask;
             item.exactMatch = penalty ? 0 : 1;
@@ -1740,7 +1629,7 @@ ace.define("ace/autocomplete/text_completer",["require","exports","module","ace/
         var wordList = Object.keys(wordScore);
         callback(null, wordList.map(function(word) {
             return {
-                caption: word,
+                name: word,
                 value: word,
                 score: wordScore[word],
                 meta: "local"
@@ -1749,21 +1638,17 @@ ace.define("ace/autocomplete/text_completer",["require","exports","module","ace/
     };
 });
 
-ace.define("ace/ext/language_tools",["require","exports","module","ace/snippets","ace/autocomplete","ace/config","ace/lib/lang","ace/autocomplete/util","ace/autocomplete/text_completer","ace/editor","ace/config"], function(require, exports, module) {
+ace.define("ace/ext/language_tools",["require","exports","module","ace/snippets","ace/autocomplete","ace/config","ace/autocomplete/util","ace/autocomplete/text_completer","ace/editor","ace/config"], function(require, exports, module) {
 "use strict";
 
 var snippetManager = require("../snippets").snippetManager;
 var Autocomplete = require("../autocomplete").Autocomplete;
 var config = require("../config");
-var lang = require("../lib/lang");
 var util = require("../autocomplete/util");
 
 var textCompleter = require("../autocomplete/text_completer");
 var keyWordCompleter = {
     getCompletions: function(editor, session, pos, prefix, callback) {
-        if (session.$mode.completer) {
-            return session.$mode.completer.getCompletions(editor, session, pos, prefix, callback);
-        }
         var state = editor.session.getState(pos.row);
         var completions = session.$mode.getCompletions(state, session, pos, prefix);
         callback(null, completions);
@@ -1784,27 +1669,15 @@ var snippetCompleter = {
                 completions.push({
                     caption: caption,
                     snippet: s.content,
-                    meta: s.tabTrigger && !s.name ? s.tabTrigger + "\u21E5 " : "snippet",
-                    type: "snippet"
+                    meta: s.tabTrigger && !s.name ? s.tabTrigger + "\u21E5 " : "snippet"
                 });
             }
         }, this);
         callback(null, completions);
-    },
-    getDocTooltip: function(item) {
-        if (item.type == "snippet" && !item.docHTML) {
-            item.docHTML = [
-                "<b>", lang.escapeHTML(item.caption), "</b>", "<hr></hr>",
-                lang.escapeHTML(item.snippet)
-            ].join("");
-        }
     }
 };
 
 var completers = [snippetCompleter, textCompleter, keyWordCompleter];
-exports.setCompleters = function(val) {
-    completers = val || [];
-};
 exports.addCompleter = function(completer) {
     completers.push(completer);
 };
@@ -1815,7 +1688,9 @@ exports.snippetCompleter = snippetCompleter;
 var expandSnippet = {
     name: "expandSnippet",
     exec: function(editor) {
-        return snippetManager.expandWithTab(editor);
+        var success = snippetManager.expandWithTab(editor);
+        if (!success)
+            editor.execCommand("indent");
     },
     bindKey: "Tab"
 };
@@ -1857,7 +1732,7 @@ var loadSnippetFile = function(id) {
 function getCompletionPrefix(editor) {
     var pos = editor.getCursorPosition();
     var line = editor.session.getLine(pos.row);
-    var prefix;
+    var prefix = util.retrievePrecedingIdentifier(line, pos.column);
     editor.completers.forEach(function(completer) {
         if (completer.identifierRegexps) {
             completer.identifierRegexps.forEach(function(identifierRegex) {
@@ -1866,7 +1741,7 @@ function getCompletionPrefix(editor) {
             });
         }
     });
-    return prefix || util.retrievePrecedingIdentifier(line, pos.column);
+    return prefix;
 }
 
 var doLiveAutocomplete = function(e) {
@@ -1883,8 +1758,11 @@ var doLiveAutocomplete = function(e) {
             if (!editor.completer) {
                 editor.completer = new Autocomplete();
             }
+            editor.completer.autoSelect = false;
             editor.completer.autoInsert = false;
             editor.completer.showPopup(editor);
+        } else if (!prefix && hasCompleter) {
+            editor.completer.detach();
         }
     }
 };
@@ -1930,6 +1808,7 @@ require("../config").defineOptions(Editor.prototype, "editor", {
     }
 });
 });
+;
                 (function() {
                     ace.require(["ace/ext/language_tools"], function() {});
                 })();

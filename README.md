@@ -3,7 +3,7 @@ kanso-ace
 
 ace wrapped for kan.so
 
-This is currently version 2014.07.09.  The ace website is:
+This is currently version 1.1.4.  The ace website is:
 
 http://ace.c9.io/
 

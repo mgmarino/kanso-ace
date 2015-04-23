@@ -109,20 +109,29 @@ module.exports.getEditorKeybordShortcuts = function(editor) {
     editor.keyBinding.$handlers.forEach(function(handler) {
         var ckb = handler.commandKeyBinding;
         for (var i in ckb) {
-            var key = i.replace(/(^|-)\w/g, function(x) { return x.toUpperCase(); });
-            var commands = ckb[i];
-            if (!Array.isArray(commands))
-                commands = [commands];
-            commands.forEach(function(command) {
+            var modifier = parseInt(i);
+            if (modifier == -1) {
+                modifier = "";
+            } else if(isNaN(modifier)) {
+                modifier = i;
+            } else {
+                modifier = "" +
+                    (modifier & KEY_MODS.command ? "Cmd-"   : "") +
+                    (modifier & KEY_MODS.ctrl    ? "Ctrl-"  : "") +
+                    (modifier & KEY_MODS.alt     ? "Alt-"   : "") +
+                    (modifier & KEY_MODS.shift   ? "Shift-" : "");
+            }
+            for (var key in ckb[i]) {
+                var command = ckb[i][key]
                 if (typeof command != "string")
                     command  = command.name
                 if (commandMap[command]) {
-                    commandMap[command].key += "|" + key;
+                    commandMap[command].key += "|" + modifier + key;
                 } else {
-                    commandMap[command] = {key: key, command: command};
+                    commandMap[command] = {key: modifier+key, command: command};
                     keybindings.push(commandMap[command]);
-                }         
-            });
+                }
+            }
         }
     });
     return keybindings;
@@ -164,6 +173,7 @@ ace.define("ace/ext/keybinding_menu",["require","exports","module","ace/editor",
     };
 
 });
+;
                 (function() {
                     ace.require(["ace/ext/keybinding_menu"], function() {});
                 })();

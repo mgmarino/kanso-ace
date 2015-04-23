@@ -41,14 +41,11 @@ exports.$detectIndentation = function(lines, fallback) {
     var first = {score: 0, length: 0};
     var spaceIndents = 0;
     for (var i = 1; i < 12; i++) {
-        var score = getScore(i);
         if (i == 1) {
-            spaceIndents = score;
-            score = stats[1] ? 0.9 : 0.8;
-            if (!stats.length)
-                score = 0
+            spaceIndents = getScore(i);
+            var score = stats.length && 1;
         } else
-            score /= spaceIndents;
+            var score = getScore(i) / spaceIndents;
 
         if (changes[i])
             score += changes[i] / changesTotal;
@@ -175,6 +172,7 @@ exports.commands = [{
 }];
 
 });
+;
                 (function() {
                     ace.require(["ace/ext/whitespace"], function() {});
                 })();

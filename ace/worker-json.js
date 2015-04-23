@@ -17,13 +17,7 @@ window.window = window;
 window.ace = window;
 
 window.onerror = function(message, file, line, col, err) {
-    postMessage({type: "error", data: {
-        message: message,
-        file: file,
-        line: line, 
-        col: col,
-        stack: err.stack
-    }});
+    console.error("Worker " + (err ? err.stack : message));
 };
 
 window.normalizeModule = function(parentId, moduleName) {
@@ -90,20 +84,15 @@ window.define = function(id, deps, factory) {
         deps = [];
         id = window.require.id;
     }
-    
-    if (typeof factory != "function") {
-        window.require.modules[id] = {
-            exports: factory,
-            initialized: true
-        };
-        return;
-    }
 
     if (!deps.length)
         // If there is no dependencies, we inject 'require', 'exports' and
         // 'module' as dependencies, to provide CommonJS compatibility.
         deps = ['require', 'exports', 'module'];
 
+    if (id.indexOf("text!") === 0) 
+        return;
+    
     var req = function(childId) {
         return window.require(id, childId);
     };
@@ -870,9 +859,9 @@ var Document = function(text) {
     this._insertLines = function(row, lines) {
         if (lines.length == 0)
             return {row: row, column: 0};
-        while (lines.length > 20000) {
-            var end = this._insertLines(row, lines.slice(0, 20000));
-            lines = lines.slice(20000);
+        while (lines.length > 0xF000) {
+            var end = this._insertLines(row, lines.slice(0, 0xF000));
+            lines = lines.slice(0xF000);
             row = end.row;
         }
 
@@ -1209,6 +1198,7 @@ exports.getMatchOffsets = function(string, regExp) {
     return matches;
 };
 exports.deferredCall = function(fcn) {
+
     var timer = null;
     var callback = function() {
         timer = null;
@@ -1600,20 +1590,20 @@ oop.inherits(JsonWorker, Mirror);
 
     this.onUpdate = function() {
         var value = this.doc.getValue();
-        var errors = [];
+
         try {
-            if (value)
-                parse(value);
+            var result = parse(value);
         } catch (e) {
             var pos = this.doc.indexToPosition(e.at-1);
-            errors.push({
+            this.sender.emit("error", {
                 row: pos.row,
                 column: pos.column,
                 text: e.message,
                 type: "error"
             });
+            return;
         }
-        this.sender.emit("annotate", errors);
+        this.sender.emit("ok");
     };
 
 }).call(JsonWorker.prototype);

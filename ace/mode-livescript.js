@@ -92,7 +92,8 @@ ace.define("ace/mode/livescript",["require","exports","module","ace/tokenizer","
   }(require('../mode/text').Mode));
   keywordend = '(?![$\\w]|-[A-Za-z]|\\s*:(?![:=]))';
   stringfill = {
-    defaultToken: 'string'
+    token: 'string',
+    regex: '.+'
   };
   LiveScriptMode.Rules = {
     start: [
@@ -185,7 +186,7 @@ ace.define("ace/mode/livescript",["require","exports","module","ace/tokenizer","
         next: 'key'
       }, {
         token: 'keyword.operator',
-        regex: '[\\^!|&%+\\-]+'
+        regex: '\\S+'
       }, {
         token: 'text',
         regex: '\\s+'
@@ -203,7 +204,8 @@ ace.define("ace/mode/livescript",["require","exports","module","ace/tokenizer","
         token: 'comment.regex',
         regex: '\\s+(?:#.*)?'
       }, {
-        defaultToken: 'string.regex'
+        token: 'string.regex',
+        regex: '\\S+'
       }
     ],
     key: [
@@ -216,7 +218,7 @@ ace.define("ace/mode/livescript",["require","exports","module","ace/tokenizer","
         next: 'start'
       }, {
         token: 'text',
-        regex: '',
+        regex: '.',
         next: 'start'
       }
     ],
@@ -226,7 +228,8 @@ ace.define("ace/mode/livescript",["require","exports","module","ace/tokenizer","
         regex: '.*?\\*/',
         next: 'start'
       }, {
-        defaultToken: 'comment.doc'
+        token: 'comment.doc',
+        regex: '.+'
       }
     ],
     qdoc: [
